@@ -1,27 +1,38 @@
-import "dotenv/config";
-import hre from "hardhat";
-import { ethers } from "ethers";
+const hre = require("hardhat");
 
 async function main() {
-  const rpcUrl = process.env.RPC_URL || "http://127.0.0.1:8545";
-  const privateKey = process.env.PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+  // Get signers
+  const [owner, producer, supplier, retailer] = await hre.ethers.getSigners();
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const wallet = new ethers.Wallet(privateKey, provider);
-  
-  console.log("Deploying with account:", wallet.address);
-  
-  const artifact = await hre.artifacts.readArtifact("SupplyChain");
-  
-  const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, wallet);
-  
-  const supplyChain = await factory.deploy();
-  await supplyChain.waitForDeployment();
+  console.log("Deploying with owner:", owner.address);
 
-  console.log("SupplyChain deployed to:", await supplyChain.getAddress());
+  // Deploy contract (ethers v5 syntax)
+  const SupplyChain = await hre.ethers.getContractFactory("SupplyChain");
+  const contract = await SupplyChain.deploy();
+  await contract.deployed(); // <-- This is correct for ethers v5
+
+  console.log("SupplyChain deployed at:", contract.address);
+  console.log("Registering roles...");
+
+  // Register roles
+  const tx1 = await contract.registerProducer(producer.address);
+  await tx1.wait();
+
+  const tx2 = await contract.registerSupplier(supplier.address);
+  await tx2.wait();
+
+  const tx3 = await contract.registerRetailer(retailer.address);
+  await tx3.wait();
+
+  console.log("\nRoles registered successfully:");
+  console.log("Producer :", producer.address);
+  console.log("Supplier :", supplier.address);
+  console.log("Retailer :", retailer.address);
+
+  console.log("\n🚀 Deployment + Role Setup Completed");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });
