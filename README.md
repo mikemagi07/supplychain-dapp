@@ -123,6 +123,7 @@ This starts a local Hardhat network on `http://127.0.0.1:8545` with 20 pre-funde
 - `npm test` – Run tests
 - `npm run clean` – Clean artifacts and cache
 - `npm run node` – Start local Hardhat node
+- `npm run deploy` - Runs the deploy.js script
 ---
 
 ## 📜 Smart Contracts
