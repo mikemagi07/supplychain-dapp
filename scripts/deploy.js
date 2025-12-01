@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  const [owner, producer, supplier, retailer] = await ethers.getSigners();
+  const [owner, producer, supplier, retailer, consumer] = await ethers.getSigners();
 
   console.log("🚀 Deploying SupplyChain contract...");
   console.log("Deployer:", owner.address);
@@ -21,6 +21,7 @@ async function main() {
   console.log("   ✔ Producer :", producer.address);
   console.log("   ✔ Supplier :", supplier.address);
   console.log("   ✔ Retailer :", retailer.address);
+  console.log("   ✔ Consumer :", consumer.address);
 
   console.log("\n🎉 Deployment + Role Setup Complete!\n");
 }
