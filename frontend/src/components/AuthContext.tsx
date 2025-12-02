@@ -60,23 +60,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
       const contract = new ethers.Contract(CONTRACT_ADDRESS, artifact.abi, provider);
 
-      // Get owner
-      const owner = await contract.owner();
-
       // Check which addresses are registered (both local and MetaMask)
-      const allAddresses = [
-        ...ALL_ADDRESSES.producers,
-        ...ALL_ADDRESSES.suppliers,
-        ...ALL_ADDRESSES.retailers,
-        ...ALL_ADDRESSES.consumers,
-        ...ALL_ADDRESSES.owners,
-      ];
+      const allAddresses = Array.from(
+        new Set([
+          ...ALL_ADDRESSES.producers,
+          ...ALL_ADDRESSES.suppliers,
+          ...ALL_ADDRESSES.retailers,
+          ...ALL_ADDRESSES.consumers,
+          ...ALL_ADDRESSES.owners,
+        ])
+      );
+
+      // Also check MetaMask connected address if available
+      if (typeof window !== "undefined" && window.ethereum) {
+        try {
+          const accounts = await window.ethereum.request({ method: "eth_accounts" });
+          if (accounts.length > 0) {
+            const metaMaskAddress = accounts[0];
+            // Add MetaMask address to the list if not already present
+            if (!allAddresses.some(addr => addr.toLowerCase() === metaMaskAddress.toLowerCase())) {
+              allAddresses.push(metaMaskAddress);
+            }
+          }
+        } catch (e) {
+          // MetaMask not available or error getting accounts
+        }
+      }
 
       const producers: string[] = [];
       const suppliers: string[] = [];
       const retailers: string[] = [];
       const consumers: string[] = [];
-      const owners: string[] = [owner];
+      const owners: string[] = [];
 
       // Check each address
       for (const addr of allAddresses) {
@@ -84,10 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const isProducer = await contract.producers(addr);
           const isSupplier = await contract.suppliers(addr);
           const isRetailer = await contract.retailers(addr);
+          const isOwner = await contract.owners(addr);
 
           if (isProducer) producers.push(addr);
           if (isSupplier) suppliers.push(addr);
           if (isRetailer) retailers.push(addr);
+          if (isOwner) owners.push(addr);
           // Consumers don't need to be registered, but we include all consumer addresses
           if (ALL_ADDRESSES.consumers.includes(addr)) consumers.push(addr);
         } catch (e) {

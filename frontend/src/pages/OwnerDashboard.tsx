@@ -12,7 +12,8 @@ export default function OwnerDashboard() {
   const [retailerAddress, setRetailerAddress] = useState("");
   const role = useRole();
   const { signer: metaMaskSigner, walletMode } = useWallet();
-  const { loadRegisteredAccounts, user } = useAuth();
+  const { loadRegisteredAccounts, user, registeredAccounts } = useAuth();
+  const [newOwnerAddress, setNewOwnerAddress] = useState("");
 
   const ensureSigner = async () => {
     // When in MetaMask mode, always use the connected MetaMask account
@@ -98,12 +99,57 @@ export default function OwnerDashboard() {
     }
   };
 
+  const addOwner = async () => {
+    if (!newOwnerAddress) {
+      alert("Please enter an owner address");
+      return;
+    }
+    try {
+      const signer = await ensureSigner();
+      if (!signer) return;
+      const contract = getContract(role, signer, true);
+      const tx = await contract.addOwner(newOwnerAddress);
+      await tx.wait();
+      alert("Owner added successfully!");
+      setNewOwnerAddress("");
+      await loadRegisteredAccounts();
+    } catch (error: any) {
+      alert("Error adding owner: " + (error.message || error));
+    }
+  };
+
   return (
     <DashboardLayout
       title="Owner Dashboard"
       description="Register new producers, suppliers, and retailers in the supply chain."
     >
       <div className="space-y-6">
+        {/* Add Owner */}
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <h2 className="font-semibold text-lg mb-3">Add Owner</h2>
+          <AddressSelect
+            addresses={[
+              ...ALL_ADDRESSES.owners,
+              ...ALL_ADDRESSES.producers,
+              ...ALL_ADDRESSES.suppliers,
+              ...ALL_ADDRESSES.retailers,
+              ...ALL_ADDRESSES.consumers,
+            ]}
+            value={newOwnerAddress}
+            onChange={setNewOwnerAddress}
+            placeholder="Select or enter Owner Address (0x...)"
+            label="Owner Address"
+            allowCustom={true}
+            role="owners"
+          />
+          <button
+            onClick={addOwner}
+            className="w-full mt-3 bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg"
+          >
+            Add Owner
+          </button>
+        </div>
+
         {/* Register Producer */}
         <div className="bg-gray-800 p-4 rounded-lg">
           <h2 className="font-semibold text-lg mb-3">Register Producer</h2>
@@ -167,10 +213,18 @@ export default function OwnerDashboard() {
         {/* Owner Info */}
         <div className="bg-gray-800 p-4 rounded-lg">
           <h2 className="font-semibold text-lg mb-3">Owner Information</h2>
-          <p className="text-sm text-gray-300">
-            <span className="font-semibold">Owner Address:</span>{" "}
-            <span className="text-cyan-300 font-mono">{ADDRESSES.owner}</span>
+          <p className="text-sm text-gray-300 mb-2">
+            <span className="font-semibold">Current Owners:</span>
           </p>
+          {registeredAccounts.owners.length > 0 ? (
+            <ul className="space-y-1 text-sm text-cyan-300 font-mono">
+              {registeredAccounts.owners.map((addr) => (
+                <li key={addr}>{addr}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-400">No owners found.</p>
+          )}
           <p className="text-sm text-gray-400 mt-2">
             As the owner, you can register new stakeholders in the supply chain.
           </p>

@@ -35,7 +35,8 @@ contract SupplyChain {
     mapping(address => bool) public retailers;
 
     uint256 public productCount;
-    address public owner;
+    // Multi-owner support: any address marked true is treated as an owner/admin
+    mapping(address => bool) public owners;
 
     // Events
     event ProductCreated(uint256 indexed productId, string name, address producer);
@@ -48,7 +49,7 @@ contract SupplyChain {
     event ProductSoldToConsumer(uint256 indexed productId, address consumer);
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can perform this action");
+        require(owners[msg.sender], "Only owner can perform this action");
         _;
     }
 
@@ -68,7 +69,25 @@ contract SupplyChain {
     }
 
     constructor() {
-        owner = msg.sender;
+        // Deployer becomes the initial owner
+        owners[msg.sender] = true;
+    }
+
+    // --- Owner management (multi-owner admin) ---
+
+    /// @notice Grant owner/admin rights to a new address.
+    /// @dev Callable only by an existing owner.
+    function addOwner(address _newOwner) external onlyOwner {
+        require(_newOwner != address(0), "Invalid owner address");
+        owners[_newOwner] = true;
+    }
+
+    /// @notice Revoke owner/admin rights from an address.
+    /// @dev Callable only by an existing owner.
+    function removeOwner(address _ownerToRemove) external onlyOwner {
+        require(_ownerToRemove != address(0), "Invalid owner address");
+        require(_ownerToRemove != msg.sender, "Owner cannot remove self");
+        owners[_ownerToRemove] = false;
     }
 
     // Owner functions to register stakeholders
