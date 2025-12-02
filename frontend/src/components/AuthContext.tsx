@@ -1,12 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { ethers } from "ethers";
-import { ALL_ADDRESSES } from "../blockchain/contract";
+import { ALL_ADDRESSES, CONTRACT_ADDRESS } from "../blockchain/contract";
 import artifact from "../blockchain/SupplyChain.json";
 
-const CONTRACT_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
-
-// Import MetaMask addresses
-const METAMASK_OWNER_ADDRESS = new ethers.Wallet("0xab3f8423f55e98845cc80f86e511378c9c9e6c506f3ba06c07b85dd546a8b9f4").address;
+// MetaMask addresses are determined dynamically from MetaMask connection
 
 type User = {
   address: string;
@@ -80,15 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const retailers: string[] = [];
       const consumers: string[] = [];
       const owners: string[] = [owner];
-
-      // Add MetaMask owner if it matches
-      const metamaskOwnerAddr = new ethers.Wallet("0xab3f8423f55e98845cc80f86e511378c9c9e6c506f3ba06c07b85dd546a8b9f4").address;
-      if (metamaskOwnerAddr.toLowerCase() === owner.toLowerCase()) {
-        owners.push(metamaskOwnerAddr);
-      } else {
-        // Add MetaMask owner separately if different
-        owners.push(metamaskOwnerAddr);
-      }
 
       // Check each address
       for (const addr of allAddresses) {

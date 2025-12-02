@@ -23,35 +23,35 @@ export default function LoginPage() {
       address: addr,
       role: "Owner",
       label: getAddressLabel(addr, "owners"),
-      isMetaMask: idx > 0,
+      isMetaMask: false, // Local Hardhat addresses only
       isRegistered: registeredAccounts.owners.some(a => a.toLowerCase() === addr.toLowerCase()),
     })),
     ...ALL_ADDRESSES.producers.map((addr) => ({
       address: addr,
       role: "Producer",
       label: getAddressLabel(addr, "producers"),
-      isMetaMask: ALL_ADDRESSES.producers.indexOf(addr) >= 3,
+      isMetaMask: false, // Local Hardhat addresses only
       isRegistered: registeredAccounts.producers.some(a => a.toLowerCase() === addr.toLowerCase()),
     })),
     ...ALL_ADDRESSES.suppliers.map((addr) => ({
       address: addr,
       role: "Supplier",
       label: getAddressLabel(addr, "suppliers"),
-      isMetaMask: ALL_ADDRESSES.suppliers.indexOf(addr) >= 3,
+      isMetaMask: false, // Local Hardhat addresses only
       isRegistered: registeredAccounts.suppliers.some(a => a.toLowerCase() === addr.toLowerCase()),
     })),
     ...ALL_ADDRESSES.retailers.map((addr) => ({
       address: addr,
       role: "Retailer",
       label: getAddressLabel(addr, "retailers"),
-      isMetaMask: ALL_ADDRESSES.retailers.indexOf(addr) >= 3,
+      isMetaMask: false, // Local Hardhat addresses only
       isRegistered: registeredAccounts.retailers.some(a => a.toLowerCase() === addr.toLowerCase()),
     })),
     ...ALL_ADDRESSES.consumers.map((addr) => ({
       address: addr,
       role: "Consumer",
       label: getAddressLabel(addr, "consumers"),
-      isMetaMask: ALL_ADDRESSES.consumers.indexOf(addr) >= 3,
+      isMetaMask: false, // Local Hardhat addresses only
       isRegistered: registeredAccounts.consumers.some(a => a.toLowerCase() === addr.toLowerCase()),
     })),
   ];

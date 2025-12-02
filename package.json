@@ -8,7 +8,7 @@
     "test": "hardhat test",
     "clean": "hardhat clean",
     "node": "hardhat node",
-    "deploy": "hardhat run scripts/deploy.js"
+    "deploy:localhost": "npm run compile && hardhat run scripts/deploy.js --network localhost"
   },
   "repository": {
     "type": "git",

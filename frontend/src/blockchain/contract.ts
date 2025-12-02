@@ -2,6 +2,40 @@ import { ethers } from "ethers";
 import artifact from "./SupplyChain.json";
 import { RoleContextType } from "../components/RoleContext";
 
+type ArtifactWithNetworks = typeof artifact & {
+  networks?: Record<string, { address?: string }>;
+};
+
+const DEFAULT_CHAIN_ID =
+  process.env.REACT_APP_CHAIN_ID ||
+  process.env.REACT_APP_NETWORK_ID ||
+  "31337";
+
+const resolveContractAddress = (): string => {
+  const networks = (artifact as ArtifactWithNetworks).networks || {};
+  const networkEntry = networks[DEFAULT_CHAIN_ID];
+
+  if (networkEntry?.address) {
+    return networkEntry.address;
+  }
+
+  const fallback =
+    process.env.REACT_APP_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS;
+
+  if (fallback) {
+    console.warn(
+      `[contract] Using fallback contract address from .env: ${fallback}`
+    );
+    return fallback;
+  }
+
+  throw new Error(
+    `No contract address found for chain ${DEFAULT_CHAIN_ID}. Run "npx hardhat run scripts/deploy.js --network localhost" to deploy and update SupplyChain.json.`
+  );
+};
+
+export const CONTRACT_ADDRESS = resolveContractAddress();
+
 const OWNER_PK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 const PRODUCER_PKS = [
@@ -28,33 +62,8 @@ const CONSUMER_PKS = [
   "0x8da4ef21b864d2cc526dbdb2a120bd2874c36c9d0a1fb7f8c63d7f7a8b41de8f",
 ];
 
-const METAMASK_OWNER_PK = "0xab3f8423f55e98845cc80f86e511378c9c9e6c506f3ba06c07b85dd546a8b9f4";
-
-const METAMASK_PRODUCER_PKS = [
-  "0x56348345b229733049706ccf7cbddc027bda0ca121a2f9f7eb85ad1a5f7eaf4a",
-  "0x4601418d53c157601a3879cd525bf1c71e3e461462ed16de74eeaec2269411ae",
-  "0x2b5695a45abdaa8272e44cfe4e67a4f4f5aac88f103372dd38f0ba535cf8fb22",
-];
-
-const METAMASK_SUPPLIER_PKS = [
-  "0xecfbddae299d996041fb863043ac20681cd53e7d83a29424e857a4800a76d4f7",
-  "0x8311eca1674382edeb0fe728cadf332593b327c81f092c8fa0f707387e30a3a0",
-  "0xd7aa654a59482642e3fbb9711c0ab26a002dec4976e706d0b8827f3028ce343f",
-];
-
-const METAMASK_RETAILER_PKS = [
-  "0x3973c22e20a01bb005bf294b9dc7dd34d1002d897af33c5caba18fb774da8f9f",
-  "0xf3c11b029fdf9948f30dc5e574dbfd8059a177fbb42e6471b3d909e0078d8724",
-  "0xb46433a9fb5e2a593ca25ac3d2fab7677c3c75a0570ddc40573827c26962652f",
-];
-
-const METAMASK_CONSUMER_PKS = [
-  "0xa66a6b92bbf582f47b1362e827220be9637ff1e09b8425e9f7e5469835592fd0",
-  "0x674a5512cdd4d0ba54146cc1af4f0284f7587b075731e809cc08dec7cc5f1d2f",
-  "0x81d44b19e2cd3ab4505bee0a921e236651606e01aba8dfe4ff86182edcfaaf5e",
-];
-
-const CONTRACT_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+// MetaMask addresses are determined dynamically from MetaMask connection
+// No need to hardcode private keys or addresses
 
 const deriveAddresses = (privateKeys: string[]): string[] => {
   return privateKeys.map(pk => new ethers.Wallet(pk).address);
@@ -67,18 +76,13 @@ const CONSUMER_ADDRESSES = deriveAddresses(CONSUMER_PKS);
 
 const OWNER_ADDRESS = new ethers.Wallet(OWNER_PK).address;
 
-const METAMASK_OWNER_ADDRESS = new ethers.Wallet(METAMASK_OWNER_PK).address;
-const METAMASK_PRODUCER_ADDRESSES = deriveAddresses(METAMASK_PRODUCER_PKS);
-const METAMASK_SUPPLIER_ADDRESSES = deriveAddresses(METAMASK_SUPPLIER_PKS);
-const METAMASK_RETAILER_ADDRESSES = deriveAddresses(METAMASK_RETAILER_PKS);
-const METAMASK_CONSUMER_ADDRESSES = deriveAddresses(METAMASK_CONSUMER_PKS);
-
+// Only include local Hardhat addresses - MetaMask addresses come from MetaMask connection
 export const ALL_ADDRESSES = {
-  owners: [OWNER_ADDRESS, METAMASK_OWNER_ADDRESS],
-  producers: [...PRODUCER_ADDRESSES, ...METAMASK_PRODUCER_ADDRESSES],
-  suppliers: [...SUPPLIER_ADDRESSES, ...METAMASK_SUPPLIER_ADDRESSES],
-  retailers: [...RETAILER_ADDRESSES, ...METAMASK_RETAILER_ADDRESSES],
-  consumers: [...CONSUMER_ADDRESSES, ...METAMASK_CONSUMER_ADDRESSES],
+  owners: [OWNER_ADDRESS],
+  producers: PRODUCER_ADDRESSES,
+  suppliers: SUPPLIER_ADDRESSES,
+  retailers: RETAILER_ADDRESSES,
+  consumers: CONSUMER_ADDRESSES,
 };
 
 const PKS: Record<string, string[]> = {
@@ -157,13 +161,13 @@ export const getSigner = (role: string, index: number = 0, metaMaskSigner?: ethe
   return new ethers.Wallet(roleKeys[index], provider);
 };
 
+// Check if address is from MetaMask by checking if it's NOT in local addresses
 const isMetaMaskAddress = (address: string, role: string): boolean => {
   const roleAddresses = ALL_ADDRESSES[role as keyof typeof ALL_ADDRESSES];
   if (!roleAddresses) return false;
   
-  const localCount = role === "owner" ? 1 : 3;
-  const addressIndex = roleAddresses.findIndex(addr => addr.toLowerCase() === address.toLowerCase());
-  return addressIndex >= localCount;
+  // If address is not in local addresses, it's likely from MetaMask
+  return !roleAddresses.some(addr => addr.toLowerCase() === address.toLowerCase());
 };
 
 const findLocalIndex = (address: string, role: string): number => {

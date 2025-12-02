@@ -1,4 +1,7 @@
 const { ethers } = require("hardhat");
+const fs = require("fs");
+const path = require("path");
+
 
 async function main() {
   const signers = await ethers.getSigners();
@@ -16,8 +19,41 @@ async function main() {
   const supplyChain = await SupplyChain.deploy();
   await supplyChain.deployed();
 
-  console.log("Contract deployed at:", supplyChain.address);
-
+  const contractAddress = supplyChain.address;
+  console.log("Contract deployed at:", contractAddress);
+  
+  // Copy contract artifact to frontend
+  const artifactPath = path.join(__dirname, "..", "artifacts", "contracts", "SupplyChain.sol", "SupplyChain.json");
+  const frontendArtifactPath = path.join(__dirname, "..", "frontend", "src", "blockchain", "SupplyChain.json");
+  
+  try {
+    if (fs.existsSync(artifactPath)) {
+      const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+      // Update the artifact with the deployed address (if not already present)
+      if (!artifact.networks || !artifact.networks["31337"]) {
+        if (!artifact.networks) artifact.networks = {};
+        artifact.networks["31337"] = {
+          address: contractAddress,
+        };
+      } else {
+        artifact.networks["31337"].address = contractAddress;
+      }
+      
+      // Ensure the frontend directory exists
+      const frontendBlockchainDir = path.dirname(frontendArtifactPath);
+      if (!fs.existsSync(frontendBlockchainDir)) {
+        fs.mkdirSync(frontendBlockchainDir, { recursive: true });
+      }
+      
+      fs.writeFileSync(frontendArtifactPath, JSON.stringify(artifact, null, 2), "utf8");
+      console.log("✓ Contract artifact copied to frontend");
+    } else {
+      console.warn("⚠ Warning: Contract artifact not found at:", artifactPath);
+    }
+  } catch (error) {
+    console.warn("⚠ Warning: Could not copy contract artifact:", error.message);
+  }
+  
   console.log("\nRegistering roles...");
   
   console.log("\nRegistering Producers:");
@@ -46,40 +82,7 @@ async function main() {
   console.log("\nOwner address:");
   console.log(`   Owner (Local):`, owner.address);
 
-  console.log("\nMetaMask Wallet Addresses (register via Owner Dashboard):");
-  const metamaskOwner = new ethers.Wallet("0xab3f8423f55e98845cc80f86e511378c9c9e6c506f3ba06c07b85dd546a8b9f4");
-  const metamaskProducers = [
-    new ethers.Wallet("0x56348345b229733049706ccf7cbddc027bda0ca121a2f9f7eb85ad1a5f7eaf4a"),
-    new ethers.Wallet("0x4601418d53c157601a3879cd525bf1c71e3e461462ed16de74eeaec2269411ae"),
-    new ethers.Wallet("0x2b5695a45abdaa8272e44cfe4e67a4f4f5aac88f103372dd38f0ba535cf8fb22"),
-  ];
-  const metamaskSuppliers = [
-    new ethers.Wallet("0xecfbddae299d996041fb863043ac20681cd53e7d83a29424e857a4800a76d4f7"),
-    new ethers.Wallet("0x8311eca1674382edeb0fe728cadf332593b327c81f092c8fa0f707387e30a3a0"),
-    new ethers.Wallet("0xd7aa654a59482642e3fbb9711c0ab26a002dec4976e706d0b8827f3028ce343f"),
-  ];
-  const metamaskRetailers = [
-    new ethers.Wallet("0x3973c22e20a01bb005bf294b9dc7dd34d1002d897af33c5caba18fb774da8f9f"),
-    new ethers.Wallet("0xf3c11b029fdf9948f30dc5e574dbfd8059a177fbb42e6471b3d909e0078d8724"),
-    new ethers.Wallet("0xb46433a9fb5e2a593ca25ac3d2fab7677c3c75a0570ddc40573827c26962652f"),
-  ];
-  const metamaskConsumers = [
-    new ethers.Wallet("0xa66a6b92bbf582f47b1362e827220be9637ff1e09b8425e9f7e5469835592fd0"),
-    new ethers.Wallet("0x674a5512cdd4d0ba54146cc1af4f0284f7587b075731e809cc08dec7cc5f1d2f"),
-    new ethers.Wallet("0x81d44b19e2cd3ab4505bee0a921e236651606e01aba8dfe4ff86182edcfaaf5e"),
-  ];
-
-  console.log(`   MetaMask Owner:`, metamaskOwner.address);
-  console.log(`   MetaMask Producers:`);
-  metamaskProducers.forEach((p, i) => console.log(`      ${i + 1}.`, p.address));
-  console.log(`   MetaMask Suppliers:`);
-  metamaskSuppliers.forEach((s, i) => console.log(`      ${i + 1}.`, s.address));
-  console.log(`   MetaMask Retailers:`);
-  metamaskRetailers.forEach((r, i) => console.log(`      ${i + 1}.`, r.address));
-  console.log(`   MetaMask Consumers:`);
-  metamaskConsumers.forEach((c, i) => console.log(`      ${i + 1}.`, c.address));
-
-  console.log("\nTip: Register MetaMask addresses via Owner Dashboard after deployment");
+  console.log("\nTip: Connect MetaMask and register addresses via Owner Dashboard after deployment");
   console.log("\nDeployment + Role Setup Complete!\n");
 }
 
