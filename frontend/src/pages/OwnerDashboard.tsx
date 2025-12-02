@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES, ADDRESSES, getLocalSigner } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, ADDRESSES, getLocalSigner, getAddressesForRole } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
@@ -11,9 +11,12 @@ export default function OwnerDashboard() {
   const [supplierAddress, setSupplierAddress] = useState("");
   const [retailerAddress, setRetailerAddress] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner, walletMode } = useWallet();
+  const { signer: metaMaskSigner, walletMode, useMetaMask } = useWallet();
   const { loadRegisteredAccounts, user, registeredAccounts } = useAuth();
   const [newOwnerAddress, setNewOwnerAddress] = useState("");
+  
+  // Include MetaMask addresses in dropdowns when using MetaMask
+  const includeMetaMask = useMetaMask();
 
   const ensureSigner = async () => {
     // When in MetaMask mode, always use the connected MetaMask account
@@ -129,11 +132,11 @@ export default function OwnerDashboard() {
           <h2 className="font-semibold text-lg mb-3">Add Owner</h2>
           <AddressSelect
             addresses={[
-              ...ALL_ADDRESSES.owners,
-              ...ALL_ADDRESSES.producers,
-              ...ALL_ADDRESSES.suppliers,
-              ...ALL_ADDRESSES.retailers,
-              ...ALL_ADDRESSES.consumers,
+              ...getAddressesForRole("owners", includeMetaMask),
+              ...getAddressesForRole("producers", includeMetaMask),
+              ...getAddressesForRole("suppliers", includeMetaMask),
+              ...getAddressesForRole("retailers", includeMetaMask),
+              ...getAddressesForRole("consumers", includeMetaMask),
             ]}
             value={newOwnerAddress}
             onChange={setNewOwnerAddress}
@@ -154,7 +157,7 @@ export default function OwnerDashboard() {
         <div className="bg-gray-800 p-4 rounded-lg">
           <h2 className="font-semibold text-lg mb-3">Register Producer</h2>
           <AddressSelect
-            addresses={ALL_ADDRESSES.producers}
+            addresses={getAddressesForRole("producers", includeMetaMask)}
             value={producerAddress}
             onChange={setProducerAddress}
             placeholder="Select or enter Producer Address (0x...)"
@@ -174,7 +177,7 @@ export default function OwnerDashboard() {
         <div className="bg-gray-800 p-4 rounded-lg">
           <h2 className="font-semibold text-lg mb-3">Register Supplier</h2>
           <AddressSelect
-            addresses={ALL_ADDRESSES.suppliers}
+            addresses={getAddressesForRole("suppliers", includeMetaMask)}
             value={supplierAddress}
             onChange={setSupplierAddress}
             placeholder="Select or enter Supplier Address (0x...)"
@@ -194,7 +197,7 @@ export default function OwnerDashboard() {
         <div className="bg-gray-800 p-4 rounded-lg">
           <h2 className="font-semibold text-lg mb-3">Register Retailer</h2>
           <AddressSelect
-            addresses={ALL_ADDRESSES.retailers}
+            addresses={getAddressesForRole("retailers", includeMetaMask)}
             value={retailerAddress}
             onChange={setRetailerAddress}
             placeholder="Select or enter Retailer Address (0x...)"

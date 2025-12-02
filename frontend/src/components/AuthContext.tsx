@@ -54,19 +54,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     owners: [] as string[],
   });
 
-  // Load registered accounts from contract
+  // Load registered accounts from contract using events (ideal approach)
   const loadRegisteredAccounts = async () => {
     try {
       const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
       const contract = new ethers.Contract(CONTRACT_ADDRESS, artifact.abi, provider);
 
-      // Check which addresses are registered (both local and MetaMask)
-      const allAddresses = Array.from(
+      const producers: string[] = [];
+      const suppliers: string[] = [];
+      const retailers: string[] = [];
+      const owners: string[] = [];
+
+      // Query past events to discover all registered addresses
+      try {
+        // Query OwnerAdded events
+        const ownerAddedFilter = contract.filters.OwnerAdded();
+        const ownerAddedEvents = await contract.queryFilter(ownerAddedFilter);
+        ownerAddedEvents.forEach((event) => {
+          if (event instanceof ethers.EventLog) {
+            const addr = event.args[0];
+            if (addr && !owners.some(a => a.toLowerCase() === addr.toLowerCase())) {
+              owners.push(addr);
+            }
+          }
+        });
+
+        // Query ProducerRegistered events
+        const producerFilter = contract.filters.ProducerRegistered();
+        const producerEvents = await contract.queryFilter(producerFilter);
+        producerEvents.forEach((event) => {
+          if (event instanceof ethers.EventLog) {
+            const addr = event.args[0];
+            if (addr && !producers.some(a => a.toLowerCase() === addr.toLowerCase())) {
+              producers.push(addr);
+            }
+          }
+        });
+
+        // Query SupplierRegistered events
+        const supplierFilter = contract.filters.SupplierRegistered();
+        const supplierEvents = await contract.queryFilter(supplierFilter);
+        supplierEvents.forEach((event) => {
+          if (event instanceof ethers.EventLog) {
+            const addr = event.args[0];
+            if (addr && !suppliers.some(a => a.toLowerCase() === addr.toLowerCase())) {
+              suppliers.push(addr);
+            }
+          }
+        });
+
+        // Query RetailerRegistered events
+        const retailerFilter = contract.filters.RetailerRegistered();
+        const retailerEvents = await contract.queryFilter(retailerFilter);
+        retailerEvents.forEach((event) => {
+          if (event instanceof ethers.EventLog) {
+            const addr = event.args[0];
+            if (addr && !retailers.some(a => a.toLowerCase() === addr.toLowerCase())) {
+              retailers.push(addr);
+            }
+          }
+        });
+
+        // Handle OwnerRemoved events - remove from owners list
+        const ownerRemovedFilter = contract.filters.OwnerRemoved();
+        const ownerRemovedEvents = await contract.queryFilter(ownerRemovedFilter);
+        ownerRemovedEvents.forEach((event) => {
+          if (event instanceof ethers.EventLog) {
+            const addr = event.args[0];
+            if (addr) {
+              const index = owners.findIndex(a => a.toLowerCase() === addr.toLowerCase());
+              if (index >= 0) {
+                owners.splice(index, 1);
+              }
+            }
+          }
+        });
+      } catch (eventError) {
+        console.warn("Error querying events, falling back to direct checks:", eventError);
+      }
+
+      // Always verify known addresses to catch:
+      // 1. Initial owner from constructor (no event emitted)
+      // 2. Any addresses manually set that might have been missed
+      // 3. MetaMask addresses that aren't in ALL_ADDRESSES
+      const addressesToCheck = Array.from(
         new Set([
           ...ALL_ADDRESSES.producers,
           ...ALL_ADDRESSES.suppliers,
           ...ALL_ADDRESSES.retailers,
-          ...ALL_ADDRESSES.consumers,
           ...ALL_ADDRESSES.owners,
         ])
       );
@@ -77,36 +152,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const accounts = await window.ethereum.request({ method: "eth_accounts" });
           if (accounts.length > 0) {
             const metaMaskAddress = accounts[0];
-            // Add MetaMask address to the list if not already present
-            if (!allAddresses.some(addr => addr.toLowerCase() === metaMaskAddress.toLowerCase())) {
-              allAddresses.push(metaMaskAddress);
+            if (!addressesToCheck.some(addr => addr.toLowerCase() === metaMaskAddress.toLowerCase())) {
+              addressesToCheck.push(metaMaskAddress);
             }
           }
         } catch (e) {
-          // MetaMask not available or error getting accounts
+          // MetaMask not available
         }
       }
 
-      const producers: string[] = [];
-      const suppliers: string[] = [];
-      const retailers: string[] = [];
-      const consumers: string[] = [];
-      const owners: string[] = [];
-
-      // Check each address
-      for (const addr of allAddresses) {
+      // Verify current state of all known addresses
+      for (const addr of addressesToCheck) {
         try {
           const isProducer = await contract.producers(addr);
           const isSupplier = await contract.suppliers(addr);
           const isRetailer = await contract.retailers(addr);
           const isOwner = await contract.owners(addr);
 
-          if (isProducer) producers.push(addr);
-          if (isSupplier) suppliers.push(addr);
-          if (isRetailer) retailers.push(addr);
-          if (isOwner) owners.push(addr);
-          // Consumers don't need to be registered, but we include all consumer addresses
-          if (ALL_ADDRESSES.consumers.includes(addr)) consumers.push(addr);
+          if (isProducer && !producers.some(a => a.toLowerCase() === addr.toLowerCase())) {
+            producers.push(addr);
+          }
+          if (isSupplier && !suppliers.some(a => a.toLowerCase() === addr.toLowerCase())) {
+            suppliers.push(addr);
+          }
+          if (isRetailer && !retailers.some(a => a.toLowerCase() === addr.toLowerCase())) {
+            retailers.push(addr);
+          }
+          if (isOwner && !owners.some(a => a.toLowerCase() === addr.toLowerCase())) {
+            owners.push(addr);
+          }
         } catch (e) {
           // Skip if check fails
         }
@@ -128,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadRegisteredAccounts();
-    
+
     // Check if user is already logged in (from localStorage)
     const savedUser = localStorage.getItem("supplychain_user");
     if (savedUser) {
@@ -138,6 +212,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("supplychain_user");
       }
     }
+
+    // Listen to registration events for real-time updates
+    const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, artifact.abi, provider);
+
+    const handleOwnerAdded = (owner: string) => {
+      setRegisteredAccounts((prev) => {
+        if (!prev.owners.some(a => a.toLowerCase() === owner.toLowerCase())) {
+          return { ...prev, owners: [...prev.owners, owner] };
+        }
+        return prev;
+      });
+    };
+
+    const handleOwnerRemoved = (owner: string) => {
+      setRegisteredAccounts((prev) => ({
+        ...prev,
+        owners: prev.owners.filter(a => a.toLowerCase() !== owner.toLowerCase()),
+      }));
+    };
+
+    const handleProducerRegistered = (producer: string) => {
+      setRegisteredAccounts((prev) => {
+        if (!prev.producers.some(a => a.toLowerCase() === producer.toLowerCase())) {
+          return { ...prev, producers: [...prev.producers, producer] };
+        }
+        return prev;
+      });
+    };
+
+    const handleSupplierRegistered = (supplier: string) => {
+      setRegisteredAccounts((prev) => {
+        if (!prev.suppliers.some(a => a.toLowerCase() === supplier.toLowerCase())) {
+          return { ...prev, suppliers: [...prev.suppliers, supplier] };
+        }
+        return prev;
+      });
+    };
+
+    const handleRetailerRegistered = (retailer: string) => {
+      setRegisteredAccounts((prev) => {
+        if (!prev.retailers.some(a => a.toLowerCase() === retailer.toLowerCase())) {
+          return { ...prev, retailers: [...prev.retailers, retailer] };
+        }
+        return prev;
+      });
+    };
+
+    // Attach event listeners
+    try {
+      contract.on("OwnerAdded", handleOwnerAdded);
+      contract.on("OwnerRemoved", handleOwnerRemoved);
+      contract.on("ProducerRegistered", handleProducerRegistered);
+      contract.on("SupplierRegistered", handleSupplierRegistered);
+      contract.on("RetailerRegistered", handleRetailerRegistered);
+    } catch (e) {
+      console.warn("Could not attach event listeners (events may not exist in contract):", e);
+    }
+
+    // Cleanup listeners on unmount
+    return () => {
+      try {
+        contract.off("OwnerAdded", handleOwnerAdded);
+        contract.off("OwnerRemoved", handleOwnerRemoved);
+        contract.off("ProducerRegistered", handleProducerRegistered);
+        contract.off("SupplierRegistered", handleSupplierRegistered);
+        contract.off("RetailerRegistered", handleRetailerRegistered);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    };
   }, []);
 
   const login = async (address: string, password: string): Promise<boolean> => {

@@ -47,6 +47,13 @@ contract SupplyChain {
     event ProductReceivedByRetailer(uint256 indexed productId);
     event ProductAddedToStore(uint256 indexed productId);
     event ProductSoldToConsumer(uint256 indexed productId, address consumer);
+    
+    // Registration events
+    event OwnerAdded(address indexed owner);
+    event OwnerRemoved(address indexed owner);
+    event ProducerRegistered(address indexed producer);
+    event SupplierRegistered(address indexed supplier);
+    event RetailerRegistered(address indexed retailer);
 
     modifier onlyOwner() {
         require(owners[msg.sender], "Only owner can perform this action");
@@ -80,6 +87,7 @@ contract SupplyChain {
     function addOwner(address _newOwner) external onlyOwner {
         require(_newOwner != address(0), "Invalid owner address");
         owners[_newOwner] = true;
+        emit OwnerAdded(_newOwner);
     }
 
     /// @notice Revoke owner/admin rights from an address.
@@ -88,19 +96,23 @@ contract SupplyChain {
         require(_ownerToRemove != address(0), "Invalid owner address");
         require(_ownerToRemove != msg.sender, "Owner cannot remove self");
         owners[_ownerToRemove] = false;
+        emit OwnerRemoved(_ownerToRemove);
     }
 
     // Owner functions to register stakeholders
     function registerProducer(address _producer) public onlyOwner {
         producers[_producer] = true;
+        emit ProducerRegistered(_producer);
     }
 
     function registerSupplier(address _supplier) public onlyOwner {
         suppliers[_supplier] = true;
+        emit SupplierRegistered(_supplier);
     }
 
     function registerRetailer(address _retailer) public onlyOwner {
         retailers[_retailer] = true;
+        emit RetailerRegistered(_retailer);
     }
 
     // Producer functions

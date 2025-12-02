@@ -13,6 +13,12 @@ type UIAddresses = {
   retailers?: string[];
   consumers?: string[];
   extra?: string[];
+  metamask?: string[];
+  metamaskOwners?: string[];
+  metamaskProducers?: string[];
+  metamaskSuppliers?: string[];
+  metamaskRetailers?: string[];
+  metamaskConsumers?: string[];
 };
 
 type ArtifactWithExtras = typeof artifact & {
@@ -45,16 +51,52 @@ const uiAddresses: Required<UIAddresses> = {
   retailers: artifactData.uiAddresses?.retailers ?? [],
   consumers: artifactData.uiAddresses?.consumers ?? [],
   extra: artifactData.uiAddresses?.extra ?? [],
+  metamask: artifactData.uiAddresses?.metamask ?? [],
+  metamaskOwners: artifactData.uiAddresses?.metamaskOwners ?? [],
+  metamaskProducers: artifactData.uiAddresses?.metamaskProducers ?? [],
+  metamaskSuppliers: artifactData.uiAddresses?.metamaskSuppliers ?? [],
+  metamaskRetailers: artifactData.uiAddresses?.metamaskRetailers ?? [],
+  metamaskConsumers: artifactData.uiAddresses?.metamaskConsumers ?? [],
+};
+
+// Helper function to get addresses for a specific role, optionally including MetaMask addresses
+// This will be used when the user is connected via MetaMask
+export const getAddressesForRole = (role: keyof typeof ALL_ADDRESSES, includeMetaMask: boolean = false): string[] => {
+  const baseAddresses = ALL_ADDRESSES[role] || [];
+  
+  if (!includeMetaMask) {
+    return baseAddresses;
+  }
+
+  // When using MetaMask, include MetaMask addresses in the appropriate role lists
+  const metamaskRoleMap: Record<string, string[]> = {
+    owners: uiAddresses.metamaskOwners,
+    producers: uiAddresses.metamaskProducers,
+    suppliers: uiAddresses.metamaskSuppliers,
+    retailers: uiAddresses.metamaskRetailers,
+    consumers: uiAddresses.metamaskConsumers,
+  };
+
+  const metamaskAddresses = metamaskRoleMap[role] || [];
+  return [...baseAddresses, ...metamaskAddresses];
 };
 
 export const ALL_ADDRESSES = {
   owners: uiAddresses.owner ? [uiAddresses.owner] : [],
   // Extra addresses are available to be assigned to ANY role, so
   // we include them in each list for selection in the UI.
+  // MetaMask addresses will be included dynamically when using MetaMask
   producers: [...uiAddresses.producers, ...uiAddresses.extra],
   suppliers: [...uiAddresses.suppliers, ...uiAddresses.extra],
   retailers: [...uiAddresses.retailers, ...uiAddresses.extra],
   consumers: [...uiAddresses.consumers, ...uiAddresses.extra],
+  metamask: uiAddresses.metamask,
+  // Export MetaMask role assignments for use in dropdowns
+  metamaskOwners: uiAddresses.metamaskOwners,
+  metamaskProducers: uiAddresses.metamaskProducers,
+  metamaskSuppliers: uiAddresses.metamaskSuppliers,
+  metamaskRetailers: uiAddresses.metamaskRetailers,
+  metamaskConsumers: uiAddresses.metamaskConsumers,
 };
 
 export const ADDRESSES = {

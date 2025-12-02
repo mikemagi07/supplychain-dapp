@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES, getLocalSigner } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, getLocalSigner, getAddressesForRole } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
@@ -12,8 +12,9 @@ export default function ProducerDashboard() {
   const [qty, setQty] = useState("");
   const [supplier, setSupplier] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner, walletMode } = useWallet();
+  const { signer: metaMaskSigner, walletMode, useMetaMask } = useWallet();
   const { user } = useAuth();
+  const includeMetaMask = useMetaMask();
 
   const getActiveSigner = async () => {
     if (walletMode === "metamask") {
@@ -103,7 +104,7 @@ export default function ProducerDashboard() {
           </p>
 
           <AddressSelect
-            addresses={ALL_ADDRESSES.suppliers}
+            addresses={getAddressesForRole("suppliers", includeMetaMask)}
             value={supplier}
             onChange={setSupplier}
             placeholder="Select Supplier Address"
