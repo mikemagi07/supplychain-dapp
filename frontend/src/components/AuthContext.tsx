@@ -190,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         producers,
         suppliers,
         retailers,
-        consumers: ALL_ADDRESSES.consumers, // All consumer addresses are allowed
+        consumers: [...ALL_ADDRESSES.consumers, ...(ALL_ADDRESSES.metamaskConsumers || [])], // All consumer addresses are allowed (including MetaMask)
         owners,
       });
     } catch (error) {
