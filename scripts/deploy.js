@@ -1,6 +1,7 @@
 const { ethers } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const { parseMetamaskAddresses } = require("./config/metamask-addresses");
 
 async function main() {
   const signers = await ethers.getSigners();
@@ -34,6 +35,9 @@ async function main() {
   const contractAddress = supplyChain.address;
   console.log("Contract deployed at:", contractAddress);
 
+  // Get MetaMask addresses from environment or use default list (reused throughout)
+  const metamaskAddresses = parseMetamaskAddresses(process.env.METAMASK_ADDRESSES, ethers);
+
   // Copy contract artifact to frontend
   const artifactPath = path.join(__dirname, "..", "artifacts", "contracts", "SupplyChain.sol", "SupplyChain.json");
   const frontendArtifactPath = path.join(__dirname, "..", "frontend", "src", "blockchain", "SupplyChain.json");
@@ -49,53 +53,6 @@ async function main() {
         };
       } else {
         artifact.networks["31337"].address = contractAddress;
-      }
-
-      // Get MetaMask addresses from environment or use default list
-      const metamaskAddressesEnv = process.env.METAMASK_ADDRESSES;
-      let metamaskAddresses = [];
-
-      if (metamaskAddressesEnv) {
-        metamaskAddresses = metamaskAddressesEnv
-          .split(",")
-          .map(addr => addr.trim())
-          .filter(addr => addr.length > 0)
-          .map(addr => {
-            try {
-              return ethers.utils.getAddress(addr); // Normalize to checksum
-            } catch (e) {
-              console.warn(`⚠️  Invalid MetaMask address skipped: ${addr}`);
-              return null;
-            }
-          })
-          .filter(addr => addr !== null);
-      } else {
-        // Default MetaMask accounts if not set in environment
-        const defaultMetamaskAddresses = [
-          "0x7d0a9c42b9953a1adc0a8a15a6a66bb489994e57",
-          "0x44da5566ef04234363b4882d856d590ab435096e",
-          "0x933d4350bca858e6de702a929878a413352885d8",
-          "0x2fa965d296f182848588f9a3ed97af2e9fdf2d76",
-          "0xb6ce9af39c7ca87f179666c05204d72516649dfc",
-          "0x5560e14d290bc0459ca186b647637238dde2cdfb",
-          "0x8567da95c79efcd36f953478d4f3adec117ae179",
-          "0x24dc4ef5604ee51c616c1a7f42906f44cf196afe",
-          "0xE5A1385f95ACd5caD8192fb82F13F065aeBA86Cc",
-          "0xd51c949838f9e35851b5c9be3f6309101b0687c2",
-          "0x984e3ea2679d8febc93d0c885712158debcef02e",
-          "0x171c52193664A2c624c5551C442A8bbde2D3a93e",
-          "0xc693c588981179b5e3f951e12c38e74ea6082d1c",
-          "0x34e817073401aaa0f21215d769cd9e3500b2e69e",
-          "0x423536d127f738b31999b2259d1ff842c2d47080",
-        ];
-
-        metamaskAddresses = defaultMetamaskAddresses.map(addr => {
-          try {
-            return ethers.utils.getAddress(addr);
-          } catch (e) {
-            return null;
-          }
-        }).filter(addr => addr !== null);
       }
 
       // Initial artifact setup (will be updated with MetaMask role assignments later)
@@ -156,55 +113,10 @@ async function main() {
   // Fund MetaMask accounts and assign roles
   const { fundMetaMaskAccounts } = require("./fundMetaMaskAccounts");
 
-  // Get MetaMask addresses (same logic as above)
-  const metamaskAddressesEnv = process.env.METAMASK_ADDRESSES;
-  let addressesToFund = [];
-
-  if (metamaskAddressesEnv) {
-    addressesToFund = metamaskAddressesEnv
-      .split(",")
-      .map(addr => addr.trim())
-      .filter(addr => addr.length > 0)
-      .map(addr => {
-        try {
-          return ethers.utils.getAddress(addr); // Normalize to checksum
-        } catch (e) {
-          console.warn(`⚠️  Invalid MetaMask address skipped: ${addr}`);
-          return null;
-        }
-      })
-      .filter(addr => addr !== null);
-  } else {
-    // Use default MetaMask accounts
-    addressesToFund = [
-      "0x7d0a9c42b9953a1adc0a8a15a6a66bb489994e57",
-      "0x44da5566ef04234363b4882d856d590ab435096e",
-      "0x933d4350bca858e6de702a929878a413352885d8",
-      "0x2fa965d296f182848588f9a3ed97af2e9fdf2d76",
-      "0xb6ce9af39c7ca87f179666c05204d72516649dfc",
-      "0x5560e14d290bc0459ca186b647637238dde2cdfb",
-      "0x8567da95c79efcd36f953478d4f3adec117ae179",
-      "0x24dc4ef5604ee51c616c1a7f42906f44cf196afe",
-      "0xE5A1385f95ACd5caD8192fb82F13F065aeBA86Cc",
-      "0xd51c949838f9e35851b5c9be3f6309101b0687c2",
-      "0x984e3ea2679d8febc93d0c885712158debcef02e",
-      "0x171c52193664A2c624c5551C442A8bbde2D3a93e",
-      "0xc693c588981179b5e3f951e12c38e74ea6082d1c",
-      "0x34e817073401aaa0f21215d769cd9e3500b2e69e",
-      "0x423536d127f738b31999b2259d1ff842c2d47080",
-    ].map(addr => {
-      try {
-        return ethers.utils.getAddress(addr);
-      } catch (e) {
-        return null;
-      }
-    }).filter(addr => addr !== null);
-  }
-
-  if (addressesToFund.length > 0) {
+  if (metamaskAddresses.length > 0) {
     const fundAmount = process.env.FUND_AMOUNT || "100";
-    console.log(`\n💰 Funding ${addressesToFund.length} MetaMask account(s)...`);
-    await fundMetaMaskAccounts(addressesToFund, fundAmount);
+    console.log(`\n💰 Funding ${metamaskAddresses.length} MetaMask account(s)...`);
+    await fundMetaMaskAccounts(metamaskAddresses, fundAmount);
 
     // Assign roles to MetaMask addresses
     console.log("\n🔐 Assigning roles to MetaMask addresses...");
@@ -246,31 +158,31 @@ async function main() {
       }
     } else {
       // Default: 1 owner, 2 producers, 2 suppliers, 2 retailers, rest are extra
-      if (addressesToFund.length > 0) {
+      if (metamaskAddresses.length > 0) {
         // 1 owner (first address)
-        if (addressesToFund.length >= 1) {
-          roleAssignments.owners.push(addressesToFund[0]);
+        if (metamaskAddresses.length >= 1) {
+          roleAssignments.owners.push(metamaskAddresses[0]);
         }
         // 2 producers (next 2 addresses)
-        if (addressesToFund.length >= 2) {
-          roleAssignments.producers.push(addressesToFund[1]);
+        if (metamaskAddresses.length >= 2) {
+          roleAssignments.producers.push(metamaskAddresses[1]);
         }
-        if (addressesToFund.length >= 3) {
-          roleAssignments.producers.push(addressesToFund[2]);
+        if (metamaskAddresses.length >= 3) {
+          roleAssignments.producers.push(metamaskAddresses[2]);
         }
         // 2 suppliers (next 2 addresses)
-        if (addressesToFund.length >= 4) {
-          roleAssignments.suppliers.push(addressesToFund[3]);
+        if (metamaskAddresses.length >= 4) {
+          roleAssignments.suppliers.push(metamaskAddresses[3]);
         }
-        if (addressesToFund.length >= 5) {
-          roleAssignments.suppliers.push(addressesToFund[4]);
+        if (metamaskAddresses.length >= 5) {
+          roleAssignments.suppliers.push(metamaskAddresses[4]);
         }
         // 2 retailers (next 2 addresses)
-        if (addressesToFund.length >= 6) {
-          roleAssignments.retailers.push(addressesToFund[5]);
+        if (metamaskAddresses.length >= 6) {
+          roleAssignments.retailers.push(metamaskAddresses[5]);
         }
-        if (addressesToFund.length >= 7) {
-          roleAssignments.retailers.push(addressesToFund[6]);
+        if (metamaskAddresses.length >= 7) {
+          roleAssignments.retailers.push(metamaskAddresses[6]);
         }
         // Rest are extra (consumers/unassigned) - no registration needed
       }
@@ -335,7 +247,7 @@ async function main() {
       ...roleAssignments.suppliers,
       ...roleAssignments.retailers,
     ]);
-    const extraMetaMaskAddresses = addressesToFund.filter(addr => !assignedAddresses.has(addr));
+    const extraMetaMaskAddresses = metamaskAddresses.filter(addr => !assignedAddresses.has(addr));
     
     if (extraMetaMaskAddresses.length > 0) {
       console.log("\n   Extra addresses (available as consumers or for later role assignment):");
