@@ -1,27 +1,36 @@
 import { useState } from "react";
-import { getContract } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
+import { useWallet } from "../components/WalletContext";
+import { useAuth } from "../components/AuthContext";
+import AddressSelect from "../components/AddressSelect";
 
 export default function RetailerDashboard() {
   const [productId, setProductId] = useState("");
   const [consumer, setConsumer] = useState("");
   const role = useRole();
+  const { signer: metaMaskSigner, useMetaMask } = useWallet();
+  const { user } = useAuth();
+  const shouldUseMetaMask = useMetaMask();
 
   const receive = async () => {
-    const tx = await getContract(role).receiveProductFromSupplier(Number(productId));
+    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const tx = await contract.receiveProductFromSupplier(Number(productId));
     await tx.wait();
     alert("Received from Supplier");
   };
 
   const add = async () => {
-    const tx = await getContract(role).addToStore(Number(productId));
+    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const tx = await contract.addToStore(Number(productId));
     await tx.wait();
     alert("Product added to store");
   };
 
   const sell = async () => {
-    const tx = await getContract(role).sellToConsumer(Number(productId), consumer);
+    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const tx = await contract.sellToConsumer(Number(productId), consumer);
     await tx.wait();
     alert("Sold to consumer");
   };
@@ -30,7 +39,6 @@ export default function RetailerDashboard() {
     <DashboardLayout
       title="Retailer Dashboard"
       description="Receive goods, mark them for sale, and sell to consumers."
-      onSelectProduct={(id) => setProductId(id)}
     >
       <input
         className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded"
@@ -53,10 +61,13 @@ export default function RetailerDashboard() {
         Add to Store
       </button>
 
-      <input
-        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded"
-        placeholder="Consumer Address"
-        onChange={(e) => setConsumer(e.target.value)}
+      <AddressSelect
+        addresses={ALL_ADDRESSES.consumers}
+        value={consumer}
+        onChange={setConsumer}
+        placeholder="Select Consumer Address"
+        label="Consumer Address"
+        role="consumers"
       />
 
       <button

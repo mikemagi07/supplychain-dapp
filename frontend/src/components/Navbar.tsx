@@ -1,18 +1,15 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
 import ConnectWallet from "./ConnectWallet";
-import { useRole } from "./RoleContext";
+import { useAuth } from "./AuthContext";
+import { formatAddress } from "../blockchain/contract";
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const { user, logout } = useAuth();
 
-  const { setRole } = useRole();
-
-  const handleSelectRole = (role: string) => {
-    setOpen(false);
-    setRole(role);   // 🔥 update global role
-    navigate(`/${role}`);
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
   };
 
 
@@ -25,6 +22,7 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden md:flex gap-6">
+          <Link to="/owner" className="hover:text-cyan-300">Owner</Link>
           <Link to="/producer" className="hover:text-cyan-300">Producer</Link>
           <Link to="/supplier" className="hover:text-cyan-300">Supplier</Link>
           <Link to="/retailer" className="hover:text-cyan-300">Retailer</Link>
@@ -32,56 +30,30 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* RIGHT SIDE: ROLE DROPDOWN + CONNECT WALLET */}
+      {/* RIGHT SIDE: CONNECT WALLET */}
       <div className="flex items-center gap-4">
 
-        {/* ROLE DROPDOWN */}
-        <div className="relative">
-          <button
-            onClick={() => setOpen(!open)}
-            className="bg-gray-800 px-4 py-2 rounded-lg hover:bg-gray-700 transition flex items-center gap-2"
-          >
-            Select Role
-            <span className="text-sm">▾</span>
-          </button>
-
-          {open && (
-            <div className="absolute right-0 mt-2 w-40 bg-white text-gray-800 rounded-lg shadow-lg overflow-hidden z-50">
-              <button
-                onClick={() => handleSelectRole("producer")}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100"
-              >
-                Producer
-              </button>
-
-              <button
-                onClick={() => handleSelectRole("supplier")}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100"
-              >
-                Supplier
-              </button>
-
-              <button
-                onClick={() => handleSelectRole("retailer")}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100"
-              >
-                Retailer
-              </button>
-
-              <button
-                onClick={() => handleSelectRole("consumer")}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100"
-              >
-                Consumer
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* CONNECT WALLET NEXT TO DROPDOWN */}
+        {/* CONNECT WALLET */}
         <div className="ml-2">
           <ConnectWallet />
         </div>
+
+        {/* USER INFO & LOGOUT */}
+        {user && (
+          <div className="ml-4 flex items-center gap-3">
+            <div className="text-sm text-gray-300">
+              <span className="font-semibold">{user.role.toUpperCase()}</span>
+              <br />
+              <span className="text-xs">{formatAddress(user.address)}</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition"
+            >
+              Logout
+            </button>
+          </div>
+        )}
       </div>
     </nav>
   );

@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 import { getContract } from "../blockchain/contract";
-import ProductDetails from "./ProductDetails";
+import ProductDetailsModal from "./ProductDetailsModal";
+import useSupplyChainEvents from "../hooks/useSupplyChainEvents";
 import { useRole } from "./RoleContext";
 
-type Product = {
-  id: string;
-  name: string;
-  status: number;
-};
+type Product = { id: string; name: string; status: number };
 
 const statusLabels: Record<number, string> = {
   0: "Created",
@@ -19,14 +16,22 @@ const statusLabels: Record<number, string> = {
   6: "Sold To Consumer",
 };
 
-export default function ProductList({ onSelect }: { onSelect?: (id: string) => void }) {
+export default function ProductList({
+  refreshKey,
+  onSelectProduct,
+}: {
+  refreshKey: number;
+  onSelectProduct?: (id: string) => void;
+}) {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const role = useRole();
 
-  const loadAllProducts = async () => {
+  const loadProducts = async () => {
     try {
-      const c = getContract(role);
+      // For read-only operations, we can use a provider instead of signer
+      // But to keep it simple, we'll use getContract with undefined for wallet params
+      const c = getContract(role, undefined, false, undefined);
       const count = await c.productCount();
 
       const list: Product[] = [];
@@ -42,54 +47,59 @@ export default function ProductList({ onSelect }: { onSelect?: (id: string) => v
       }
       setProducts(list);
     } catch (err) {
-      console.error("Error loading product list:", err);
+      console.error("Error loading products:", err);
     }
   };
 
+  // refresh on parent change
   useEffect(() => {
-    loadAllProducts();
-  }, []);
+    loadProducts();
+  }, [refreshKey, role]);
 
-  const handleSelect = (id: string) => {
+  // refresh automatically on blockchain events
+  useSupplyChainEvents(() => loadProducts());
+
+  const handleOpen = (id: string) => {
     setSelectedId(id);
-    if (onSelect) onSelect(id);
+    if (onSelectProduct) onSelectProduct(id);
   };
 
   return (
     <div className="space-y-4">
 
       {/* PRODUCT LIST */}
-      <div className="bg-white shadow rounded-xl p-4 h-80 overflow-y-auto">
+      <div className="bg-white p-4 rounded-xl shadow min-h-[500px] max-h-[calc(100vh-150px)] overflow-y-auto">
         <h2 className="text-lg font-bold mb-3">Products</h2>
 
         {products.map((p) => (
           <div
             key={p.id}
-            onClick={() => handleSelect(p.id)}
-            className="border p-3 rounded-lg mb-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center"
+            className="border p-3 rounded-lg mb-2 cursor-pointer hover:bg-gray-100 flex justify-between"
           >
             <div>
-              <p className="font-semibold">#{p.id} — {p.name}</p>
+              <p className="font-semibold">
+                #{p.id} — {p.name}
+              </p>
               <p className="text-xs text-gray-600">{statusLabels[p.status]}</p>
             </div>
 
-            <button className="text-blue-600 hover:underline text-sm">
+            <button
+              onClick={() => handleOpen(p.id)}
+              className="text-blue-600 hover:underline text-sm"
+            >
               View
             </button>
           </div>
         ))}
       </div>
 
-      {/* PRODUCT DETAILS */}
-      <div className="min-h-[250px]">
-        {selectedId ? (
-          <ProductDetails productId={selectedId} />
-        ) : (
-          <div className="bg-white p-5 rounded-xl shadow text-gray-500 text-sm">
-            Select a product to view details.
-          </div>
-        )}
-      </div>
+      {/* MODAL */}
+      {selectedId && (
+        <ProductDetailsModal
+          productId={selectedId}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
   );
 }

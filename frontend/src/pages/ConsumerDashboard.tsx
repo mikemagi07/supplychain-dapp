@@ -2,14 +2,20 @@ import { useState } from "react";
 import { getContract } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
+import { useWallet } from "../components/WalletContext";
+import { useAuth } from "../components/AuthContext";
 
 export default function ConsumerDashboard() {
   const [productId, setProductId] = useState("");
   const [details, setDetails] = useState<any>(null);
   const role = useRole();
+  const { signer: metaMaskSigner, useMetaMask } = useWallet();
+  const { user } = useAuth();
+  const shouldUseMetaMask = useMetaMask();
 
   const load = async () => {
-    const res = await getContract(role).getProduct(Number(productId));
+    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const res = await contract.getProduct(Number(productId));
     setDetails(res);
   };
 
@@ -17,7 +23,6 @@ export default function ConsumerDashboard() {
     <DashboardLayout
       title="Consumer Dashboard"
       description="Verify product authenticity and trace provenance."
-      onSelectProduct={(id) => setProductId(id)}
     >
       <input
         className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded"
