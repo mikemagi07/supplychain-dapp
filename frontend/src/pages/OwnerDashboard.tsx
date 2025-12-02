@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES, ADDRESSES, getLocalSigner, getAddressesForRole } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, ADDRESSES, getLocalSigner, getAddressesForRole, getReadOnlyContract } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
@@ -25,6 +25,33 @@ export default function OwnerDashboard() {
         alert("Please connect MetaMask as the owner.");
         return null;
       }
+      
+      // Verify the MetaMask address is registered as an owner in the contract
+      const metaMaskAddress = await metaMaskSigner.getAddress();
+      
+      // Check both the registeredAccounts list and directly with the contract
+      const isInList = registeredAccounts.owners.some(
+        addr => addr.toLowerCase() === metaMaskAddress.toLowerCase()
+      );
+      
+      // Also verify directly with the contract to ensure it's actually registered
+      try {
+        const contract = getReadOnlyContract();
+        const isRegisteredInContract = await contract.owners(metaMaskAddress);
+        
+        if (!isRegisteredInContract) {
+          alert(`This MetaMask address (${metaMaskAddress.slice(0, 6)}...${metaMaskAddress.slice(-4)}) is not registered as an owner in the contract. Please use the deployer account to add it as an owner first, or use a different MetaMask account that is registered as an owner.\n\nNote: If you just deployed, make sure the contract was deployed with MetaMask addresses registered.`);
+          return null;
+        }
+      } catch (error: any) {
+        console.error("Error checking owner registration:", error);
+        // If we can't check, at least verify it's in the list
+        if (!isInList) {
+          alert(`Unable to verify owner registration. This address may not be registered. Please try refreshing the page or use the deployer account to add this address as an owner.`);
+          return null;
+        }
+      }
+      
       return metaMaskSigner;
     }
 

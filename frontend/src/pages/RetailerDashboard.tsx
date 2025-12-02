@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES, getLocalSigner, getAddressesForRole } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, getLocalSigner, getAddressesForRole, getReadOnlyContract } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
@@ -11,7 +11,7 @@ export default function RetailerDashboard() {
   const [consumer, setConsumer] = useState("");
   const role = useRole();
   const { signer: metaMaskSigner, walletMode, useMetaMask } = useWallet();
-  const { user } = useAuth();
+  const { user, registeredAccounts } = useAuth();
   const includeMetaMask = useMetaMask();
 
   const ensureSigner = async () => {
@@ -20,6 +20,33 @@ export default function RetailerDashboard() {
         alert("Please connect MetaMask to perform this action.");
         return null;
       }
+      
+      // Verify the MetaMask address is registered as a retailer in the contract
+      const metaMaskAddress = await metaMaskSigner.getAddress();
+      
+      // Check both the registeredAccounts list and directly with the contract
+      const isInList = registeredAccounts.retailers.some(
+        addr => addr.toLowerCase() === metaMaskAddress.toLowerCase()
+      );
+      
+      // Also verify directly with the contract to ensure it's actually registered
+      try {
+        const contract = getReadOnlyContract();
+        const isRegisteredInContract = await contract.retailers(metaMaskAddress);
+        
+        if (!isRegisteredInContract) {
+          alert(`This MetaMask address (${metaMaskAddress.slice(0, 6)}...${metaMaskAddress.slice(-4)}) is not registered as a retailer in the contract. Please use an owner account to register it first, or use a different MetaMask account that is registered as a retailer.\n\nNote: If you just deployed, make sure the contract was deployed with MetaMask addresses registered.`);
+          return null;
+        }
+      } catch (error: any) {
+        console.error("Error checking retailer registration:", error);
+        // If we can't check, at least verify it's in the list
+        if (!isInList) {
+          alert(`Unable to verify retailer registration. This address may not be registered. Please try refreshing the page or contact an owner to register this address.`);
+          return null;
+        }
+      }
+      
       return metaMaskSigner;
     }
 

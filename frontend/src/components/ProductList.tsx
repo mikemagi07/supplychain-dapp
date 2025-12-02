@@ -15,6 +15,16 @@ const statusLabels: Record<number, string> = {
   6: "Sold To Consumer",
 };
 
+const statusColors: Record<number, string> = {
+  0: "bg-gray-300 text-gray-800",
+  1: "bg-blue-300 text-blue-800",
+  2: "bg-purple-300 text-purple-800",
+  3: "bg-yellow-300 text-yellow-800",
+  4: "bg-green-300 text-green-800",
+  5: "bg-emerald-300 text-emerald-900",
+  6: "bg-red-300 text-red-800",
+};
+
 export default function ProductList({
   refreshKey,
   onSelectProduct,
@@ -70,20 +80,24 @@ export default function ProductList({
         {products.map((p) => (
           <div
             key={p.id}
-            className="border p-3 rounded-lg mb-2 cursor-pointer hover:bg-gray-100 flex justify-between"
+            className="border border-gray-200 p-4 rounded-lg mb-3 cursor-pointer hover:shadow-md transition-shadow bg-white flex justify-between items-center"
           >
-            <div>
-              <p className="font-semibold">
+            <div className="flex-1">
+              <p className="font-semibold text-gray-900 mb-2">
                 #{p.id} — {p.name}
               </p>
-              <p className="text-xs text-gray-600">{statusLabels[p.status]}</p>
+              <span
+                className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${statusColors[p.status]}`}
+              >
+                {statusLabels[p.status]}
+              </span>
             </div>
 
             <button
               onClick={() => handleOpen(p.id)}
-              className="text-blue-600 hover:underline text-sm"
+              className="ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
             >
-              View
+              View Details
             </button>
           </div>
         ))}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES, getLocalSigner, getAddressesForRole } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, getLocalSigner, getAddressesForRole, getReadOnlyContract } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
@@ -13,7 +13,7 @@ export default function ProducerDashboard() {
   const [supplier, setSupplier] = useState("");
   const role = useRole();
   const { signer: metaMaskSigner, walletMode, useMetaMask } = useWallet();
-  const { user } = useAuth();
+  const { user, registeredAccounts } = useAuth();
   const includeMetaMask = useMetaMask();
 
   const getActiveSigner = async () => {
@@ -22,6 +22,33 @@ export default function ProducerDashboard() {
         alert("Please connect MetaMask to perform this action.");
         return null;
       }
+      
+      // Verify the MetaMask address is registered as a producer in the contract
+      const metaMaskAddress = await metaMaskSigner.getAddress();
+      console.log("MetaMask address:", metaMaskAddress);
+      // Check both the registeredAccounts list and directly with the contract
+      const isInList = registeredAccounts.producers.some(
+        addr => addr.toLowerCase() === metaMaskAddress.toLowerCase()
+      );
+      
+      // Also verify directly with the contract to ensure it's actually registered
+      try {
+        const contract = getReadOnlyContract();
+        const isRegisteredInContract = await contract.producers(metaMaskAddress);
+        
+        if (!isRegisteredInContract) {
+          alert(`This MetaMask address (${metaMaskAddress.slice(0, 6)}...${metaMaskAddress.slice(-4)}) is not registered as a producer in the contract. Please use an owner account to register it first, or use a different MetaMask account that is registered as a producer.\n\nNote: If you just deployed, make sure the contract was deployed with MetaMask addresses registered.`);
+          return null;
+        }
+      } catch (error: any) {
+        console.error("Error checking producer registration:", error);
+        // If we can't check, at least verify it's in the list
+        if (!isInList) {
+          alert(`Unable to verify producer registration. This address may not be registered. Please try refreshing the page or contact an owner to register this address.`);
+          return null;
+        }
+      }
+      
       return metaMaskSigner;
     }
 
