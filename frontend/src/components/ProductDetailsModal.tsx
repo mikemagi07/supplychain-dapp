@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { getContract } from "../blockchain/contract";
-import { useRole } from "./RoleContext";
+import { getReadOnlyContract } from "../blockchain/contract";
 
 const statusLabels: Record<number, string> = {
   0: "Created",
@@ -20,10 +19,9 @@ export default function ProductDetailsModal({
   onClose: () => void;
 }) {
   const [product, setProduct] = useState<any>(null);
-  const role = useRole();
 
   const loadProduct = async () => {
-    const c = getContract(role);
+    const c = getReadOnlyContract();
     const p = await c.getProduct(Number(productId));
 
     setProduct({

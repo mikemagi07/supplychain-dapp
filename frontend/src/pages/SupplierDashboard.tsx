@@ -3,19 +3,26 @@ import { getContract, ALL_ADDRESSES } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
-import { useAuth } from "../components/AuthContext";
 import AddressSelect from "../components/AddressSelect";
 
 export default function SupplierDashboard() {
   const [shipping, setShipping] = useState("");
   const [retailer, setRetailer] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner, useMetaMask } = useWallet();
-  const { user } = useAuth();
-  const shouldUseMetaMask = useMetaMask();
+  const { signer: metaMaskSigner } = useWallet();
+
+  const ensureSigner = () => {
+    if (!metaMaskSigner) {
+      alert("Please connect MetaMask to perform this action.");
+      return null;
+    }
+    return metaMaskSigner;
+  };
 
   const receive = async (refreshProducts: () => void, productId: string) => {
-    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const signer = ensureSigner();
+    if (!signer) return;
+    const contract = getContract(role, signer, true);
     const tx = await contract.receiveProduct(Number(productId));
     await tx.wait();
     alert("Received from Producer");
@@ -23,7 +30,9 @@ export default function SupplierDashboard() {
   };
 
   const update = async (refreshProducts: () => void, productId: string) => {
-    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const signer = ensureSigner();
+    if (!signer) return;
+    const contract = getContract(role, signer, true);
     const tx = await contract.updateShippingInfo(Number(productId), shipping);
     await tx.wait();
     alert("Shipping updated");
@@ -31,7 +40,9 @@ export default function SupplierDashboard() {
   };
 
   const sendToRetailer = async (refreshProducts: () => void, productId: string) => {
-    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const signer = ensureSigner();
+    if (!signer) return;
+    const contract = getContract(role, signer, true);
     const tx = await contract.sendToRetailer(Number(productId), retailer);
     await tx.wait();
     alert("Sent to retailer");

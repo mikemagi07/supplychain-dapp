@@ -1,8 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { ethers } from "ethers";
 
-export type WalletMode = "metamask" | "hardcoded";
-
 type WalletContextType = {
   isConnected: boolean;
   address: string | null;
@@ -11,9 +9,6 @@ type WalletContextType = {
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
   isMetaMaskAvailable: boolean;
-  walletMode: WalletMode;
-  setWalletMode: (mode: WalletMode) => void;
-  useMetaMask: () => boolean; // Returns true if should use MetaMask
 };
 
 const WalletContext = createContext<WalletContextType>({
@@ -24,9 +19,6 @@ const WalletContext = createContext<WalletContextType>({
   connectWallet: async () => {},
   disconnectWallet: () => {},
   isMetaMaskAvailable: false,
-  walletMode: "hardcoded",
-  setWalletMode: () => {},
-  useMetaMask: () => false,
 });
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -35,12 +27,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [isMetaMaskAvailable, setIsMetaMaskAvailable] = useState(false);
-  const [walletMode, setWalletMode] = useState<WalletMode>("hardcoded");
-  
-  // Determine if we should use MetaMask based on mode and connection
-  const useMetaMask = () => {
-    return walletMode === "metamask" && isConnected;
-  };
 
   // Check if MetaMask is available
   useEffect(() => {
@@ -130,9 +116,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         connectWallet,
         disconnectWallet,
         isMetaMaskAvailable,
-        walletMode,
-        setWalletMode,
-        useMetaMask,
       }}
     >
       {children}

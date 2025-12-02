@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { getContract } from "../blockchain/contract";
+import { getReadOnlyContract } from "../blockchain/contract";
 import ProductDetailsModal from "./ProductDetailsModal";
 import useSupplyChainEvents from "../hooks/useSupplyChainEvents";
-import { useRole } from "./RoleContext";
 
 type Product = { id: string; name: string; status: number };
 
@@ -25,13 +24,10 @@ export default function ProductList({
 }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const role = useRole();
 
   const loadProducts = async () => {
     try {
-      // For read-only operations, we can use a provider instead of signer
-      // But to keep it simple, we'll use getContract with undefined for wallet params
-      const c = getContract(role, undefined, false, undefined);
+      const c = getReadOnlyContract();
       const count = await c.productCount();
 
       const list: Product[] = [];
@@ -54,7 +50,7 @@ export default function ProductList({
   // refresh on parent change
   useEffect(() => {
     loadProducts();
-  }, [refreshKey, role]);
+  }, [refreshKey]);
 
   // refresh automatically on blockchain events
   useSupplyChainEvents(() => loadProducts());

@@ -1,20 +1,15 @@
 import { useEffect } from "react";
-import { getContract } from "../blockchain/contract";
+import { getReadOnlyContract } from "../blockchain/contract";
 import { useRole } from "../components/RoleContext";
-import { useWallet } from "../components/WalletContext";
-import { useAuth } from "../components/AuthContext";
 
 export default function useSupplyChainEvents(
   onAnyEvent: () => void,
   onMessage?: (msg: string) => void
 ) {
   const role = useRole();
-  const { signer: metaMaskSigner, useMetaMask, walletMode } = useWallet();
-  const { user } = useAuth();
-  const shouldUseMetaMask = useMetaMask();
   
   useEffect(() => {
-    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const contract = getReadOnlyContract();
 
     const notify = (msg: string) => {
       if (onMessage) onMessage(msg);
@@ -67,5 +62,5 @@ export default function useSupplyChainEvents(
         contract.off(eventName, handlers[eventName as keyof typeof handlers]);
       }
     };
-  }, [role, metaMaskSigner, walletMode, shouldUseMetaMask, user?.address, onAnyEvent, onMessage]);
+  }, [role, onAnyEvent, onMessage]);
 }

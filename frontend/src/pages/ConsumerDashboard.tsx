@@ -1,20 +1,13 @@
 import { useState } from "react";
-import { getContract } from "../blockchain/contract";
+import { getReadOnlyContract } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
-import { useRole } from "../components/RoleContext";
-import { useWallet } from "../components/WalletContext";
-import { useAuth } from "../components/AuthContext";
 
 export default function ConsumerDashboard() {
   const [productId, setProductId] = useState("");
   const [details, setDetails] = useState<any>(null);
-  const role = useRole();
-  const { signer: metaMaskSigner, useMetaMask } = useWallet();
-  const { user } = useAuth();
-  const shouldUseMetaMask = useMetaMask();
 
   const load = async () => {
-    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    const contract = getReadOnlyContract();
     const res = await contract.getProduct(Number(productId));
     setDetails(res);
   };

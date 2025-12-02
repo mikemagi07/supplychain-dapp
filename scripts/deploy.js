@@ -38,6 +38,14 @@ async function main() {
       } else {
         artifact.networks["31337"].address = contractAddress;
       }
+
+      artifact.uiAddresses = {
+        owner: owner.address,
+        producers: producers.map((s) => s.address),
+        suppliers: suppliers.map((s) => s.address),
+        retailers: retailers.map((s) => s.address),
+        consumers: consumers.map((s) => s.address),
+      };
       
       // Ensure the frontend directory exists
       const frontendBlockchainDir = path.dirname(frontendArtifactPath);

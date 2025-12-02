@@ -11,11 +11,16 @@ export default function OwnerDashboard() {
   const [supplierAddress, setSupplierAddress] = useState("");
   const [retailerAddress, setRetailerAddress] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner, useMetaMask } = useWallet();
+  const { signer: metaMaskSigner } = useWallet();
   const { loadRegisteredAccounts } = useAuth();
-  const shouldUseMetaMask = useMetaMask();
 
-  const { user } = useAuth();
+  const ensureSigner = () => {
+    if (!metaMaskSigner) {
+      alert("Please connect MetaMask as the owner.");
+      return null;
+    }
+    return metaMaskSigner;
+  };
 
   const registerProducer = async () => {
     if (!producerAddress) {
@@ -23,7 +28,9 @@ export default function OwnerDashboard() {
       return;
     }
     try {
-      const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+      const signer = ensureSigner();
+      if (!signer) return;
+      const contract = getContract(role, signer, true);
       const tx = await contract.registerProducer(producerAddress);
       await tx.wait();
       alert("Producer registered successfully!");
@@ -41,7 +48,9 @@ export default function OwnerDashboard() {
       return;
     }
     try {
-      const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+      const signer = ensureSigner();
+      if (!signer) return;
+      const contract = getContract(role, signer, true);
       const tx = await contract.registerSupplier(supplierAddress);
       await tx.wait();
       alert("Supplier registered successfully!");
@@ -59,7 +68,9 @@ export default function OwnerDashboard() {
       return;
     }
     try {
-      const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+      const signer = ensureSigner();
+      if (!signer) return;
+      const contract = getContract(role, signer, true);
       const tx = await contract.registerRetailer(retailerAddress);
       await tx.wait();
       alert("Retailer registered successfully!");

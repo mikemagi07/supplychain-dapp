@@ -3,7 +3,6 @@ import { getContract, ALL_ADDRESSES } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
-import { useAuth } from "../components/AuthContext";
 import AddressSelect from "../components/AddressSelect";
 
 export default function ProducerDashboard() {
@@ -12,19 +11,25 @@ export default function ProducerDashboard() {
   const [qty, setQty] = useState("");
   const [supplier, setSupplier] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner, useMetaMask } = useWallet();
-  const { user } = useAuth();
-  const shouldUseMetaMask = useMetaMask();
+  const { signer: metaMaskSigner } = useWallet();
 
   const createProduct = async (refreshProducts: () => void) => {
-    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    if (!metaMaskSigner) {
+      alert("Please connect MetaMask to create products.");
+      return;
+    }
+    const contract = getContract(role, metaMaskSigner, true);
     const tx = await contract.addProduct(name, desc, Number(qty));
     await tx.wait();
     refreshProducts();
   };
 
   const sendToSupplier = async (refreshProducts: () => void, productId: string) => {
-    const contract = getContract(role, metaMaskSigner, shouldUseMetaMask, user?.address);
+    if (!metaMaskSigner) {
+      alert("Please connect MetaMask to send products.");
+      return;
+    }
+    const contract = getContract(role, metaMaskSigner, true);
     const tx = await contract.sendToSupplier(Number(productId), supplier);
     await tx.wait();
     refreshProducts();
