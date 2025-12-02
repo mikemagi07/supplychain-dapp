@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getReadOnlyContract } from "../blockchain/contract";
 import ProductDetailsModal from "./ProductDetailsModal";
 import useSupplyChainEvents from "../hooks/useSupplyChainEvents";
@@ -35,7 +35,7 @@ export default function ProductList({
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       const c = getReadOnlyContract();
       const count = await c.productCount();
@@ -55,15 +55,15 @@ export default function ProductList({
     } catch (err) {
       console.error("Error loading products:", err);
     }
-  };
+  }, []);
 
   // refresh on parent change
   useEffect(() => {
     loadProducts();
-  }, [refreshKey]);
+  }, [refreshKey, loadProducts]);
 
   // refresh automatically on blockchain events
-  useSupplyChainEvents(() => loadProducts());
+  useSupplyChainEvents(loadProducts);
 
   const handleSelect = (id: string) => {
     if (onSelectProduct) onSelectProduct(id);
