@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, getLocalSigner } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
+import { useAuth } from "../components/AuthContext";
 import AddressSelect from "../components/AddressSelect";
 
 export default function ProducerDashboard() {
@@ -11,25 +12,46 @@ export default function ProducerDashboard() {
   const [qty, setQty] = useState("");
   const [supplier, setSupplier] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner } = useWallet();
+  const { signer: metaMaskSigner, walletMode } = useWallet();
+  const { user } = useAuth();
+
+  const getActiveSigner = async () => {
+    if (walletMode === "metamask") {
+      if (!metaMaskSigner) {
+        alert("Please connect MetaMask to perform this action.");
+        return null;
+      }
+      return metaMaskSigner;
+    }
+
+    if (!user) {
+      alert("Please login as a local producer first.");
+      return null;
+    }
+
+    try {
+      return await getLocalSigner(user.address);
+    } catch (e: any) {
+      alert("Unable to create local signer: " + (e.message || e));
+      return null;
+    }
+  };
 
   const createProduct = async (refreshProducts: () => void) => {
-    if (!metaMaskSigner) {
-      alert("Please connect MetaMask to create products.");
-      return;
-    }
-    const contract = getContract(role, metaMaskSigner, true);
+    const signer = await getActiveSigner();
+    if (!signer) return;
+
+    const contract = getContract(role, signer, true);
     const tx = await contract.addProduct(name, desc, Number(qty));
     await tx.wait();
     refreshProducts();
   };
 
   const sendToSupplier = async (refreshProducts: () => void, productId: string) => {
-    if (!metaMaskSigner) {
-      alert("Please connect MetaMask to send products.");
-      return;
-    }
-    const contract = getContract(role, metaMaskSigner, true);
+    const signer = await getActiveSigner();
+    if (!signer) return;
+
+    const contract = getContract(role, signer, true);
     const tx = await contract.sendToSupplier(Number(productId), supplier);
     await tx.wait();
     refreshProducts();

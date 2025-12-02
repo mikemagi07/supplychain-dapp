@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES, ADDRESSES } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, ADDRESSES, getLocalSigner } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
@@ -11,15 +11,31 @@ export default function OwnerDashboard() {
   const [supplierAddress, setSupplierAddress] = useState("");
   const [retailerAddress, setRetailerAddress] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner } = useWallet();
-  const { loadRegisteredAccounts } = useAuth();
+  const { signer: metaMaskSigner, walletMode } = useWallet();
+  const { loadRegisteredAccounts, user } = useAuth();
 
-  const ensureSigner = () => {
-    if (!metaMaskSigner) {
-      alert("Please connect MetaMask as the owner.");
+  const ensureSigner = async () => {
+    // When in MetaMask mode, always use the connected MetaMask account
+    if (walletMode === "metamask") {
+      if (!metaMaskSigner) {
+        alert("Please connect MetaMask as the owner.");
+        return null;
+      }
+      return metaMaskSigner;
+    }
+
+    // When in local mode, use the logged-in local owner account
+    if (!user) {
+      alert("Please login as the local owner first.");
       return null;
     }
-    return metaMaskSigner;
+
+    try {
+      return await getLocalSigner(user.address);
+    } catch (e: any) {
+      alert("Unable to create local signer: " + (e.message || e));
+      return null;
+    }
   };
 
   const registerProducer = async () => {
@@ -28,7 +44,7 @@ export default function OwnerDashboard() {
       return;
     }
     try {
-      const signer = ensureSigner();
+      const signer = await ensureSigner();
       if (!signer) return;
       const contract = getContract(role, signer, true);
       const tx = await contract.registerProducer(producerAddress);
@@ -48,7 +64,7 @@ export default function OwnerDashboard() {
       return;
     }
     try {
-      const signer = ensureSigner();
+      const signer = await ensureSigner();
       if (!signer) return;
       const contract = getContract(role, signer, true);
       const tx = await contract.registerSupplier(supplierAddress);
@@ -68,7 +84,7 @@ export default function OwnerDashboard() {
       return;
     }
     try {
-      const signer = ensureSigner();
+      const signer = await ensureSigner();
       if (!signer) return;
       const contract = getContract(role, signer, true);
       const tx = await contract.registerRetailer(retailerAddress);

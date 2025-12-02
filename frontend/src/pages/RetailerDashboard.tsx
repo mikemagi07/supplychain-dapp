@@ -1,26 +1,42 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, getLocalSigner } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
+import { useAuth } from "../components/AuthContext";
 import AddressSelect from "../components/AddressSelect";
 
 export default function RetailerDashboard() {
   const [productId, setProductId] = useState("");
   const [consumer, setConsumer] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner } = useWallet();
+  const { signer: metaMaskSigner, walletMode } = useWallet();
+  const { user } = useAuth();
 
-  const ensureSigner = () => {
-    if (!metaMaskSigner) {
-      alert("Please connect MetaMask to perform this action.");
+  const ensureSigner = async () => {
+    if (walletMode === "metamask") {
+      if (!metaMaskSigner) {
+        alert("Please connect MetaMask to perform this action.");
+        return null;
+      }
+      return metaMaskSigner;
+    }
+
+    if (!user) {
+      alert("Please login as a local retailer first.");
       return null;
     }
-    return metaMaskSigner;
+
+    try {
+      return await getLocalSigner(user.address);
+    } catch (e: any) {
+      alert("Unable to create local signer: " + (e.message || e));
+      return null;
+    }
   };
 
   const receive = async () => {
-    const signer = ensureSigner();
+    const signer = await ensureSigner();
     if (!signer) return;
     const contract = getContract(role, signer, true);
     const tx = await contract.receiveProductFromSupplier(Number(productId));
@@ -29,7 +45,7 @@ export default function RetailerDashboard() {
   };
 
   const add = async () => {
-    const signer = ensureSigner();
+    const signer = await ensureSigner();
     if (!signer) return;
     const contract = getContract(role, signer, true);
     const tx = await contract.addToStore(Number(productId));
@@ -38,7 +54,7 @@ export default function RetailerDashboard() {
   };
 
   const sell = async () => {
-    const signer = ensureSigner();
+    const signer = await ensureSigner();
     if (!signer) return;
     const contract = getContract(role, signer, true);
     const tx = await contract.sellToConsumer(Number(productId), consumer);

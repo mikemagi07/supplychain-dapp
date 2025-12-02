@@ -1,26 +1,42 @@
 import { useState } from "react";
-import { getContract, ALL_ADDRESSES } from "../blockchain/contract";
+import { getContract, ALL_ADDRESSES, getLocalSigner } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
+import { useAuth } from "../components/AuthContext";
 import AddressSelect from "../components/AddressSelect";
 
 export default function SupplierDashboard() {
   const [shipping, setShipping] = useState("");
   const [retailer, setRetailer] = useState("");
   const role = useRole();
-  const { signer: metaMaskSigner } = useWallet();
+  const { signer: metaMaskSigner, walletMode } = useWallet();
+  const { user } = useAuth();
 
-  const ensureSigner = () => {
-    if (!metaMaskSigner) {
-      alert("Please connect MetaMask to perform this action.");
+  const ensureSigner = async () => {
+    if (walletMode === "metamask") {
+      if (!metaMaskSigner) {
+        alert("Please connect MetaMask to perform this action.");
+        return null;
+      }
+      return metaMaskSigner;
+    }
+
+    if (!user) {
+      alert("Please login as a local supplier first.");
       return null;
     }
-    return metaMaskSigner;
+
+    try {
+      return await getLocalSigner(user.address);
+    } catch (e: any) {
+      alert("Unable to create local signer: " + (e.message || e));
+      return null;
+    }
   };
 
   const receive = async (refreshProducts: () => void, productId: string) => {
-    const signer = ensureSigner();
+    const signer = await ensureSigner();
     if (!signer) return;
     const contract = getContract(role, signer, true);
     const tx = await contract.receiveProduct(Number(productId));
@@ -30,7 +46,7 @@ export default function SupplierDashboard() {
   };
 
   const update = async (refreshProducts: () => void, productId: string) => {
-    const signer = ensureSigner();
+    const signer = await ensureSigner();
     if (!signer) return;
     const contract = getContract(role, signer, true);
     const tx = await contract.updateShippingInfo(Number(productId), shipping);
@@ -40,7 +56,7 @@ export default function SupplierDashboard() {
   };
 
   const sendToRetailer = async (refreshProducts: () => void, productId: string) => {
-    const signer = ensureSigner();
+    const signer = await ensureSigner();
     if (!signer) return;
     const contract = getContract(role, signer, true);
     const tx = await contract.sendToRetailer(Number(productId), retailer);

@@ -12,6 +12,19 @@ async function main() {
   const retailers = [signers[3], signers[7], signers[11]];
   const consumers = [signers[4], signers[8], signers[12]];
 
+  // Extra accounts (not registered yet) that can be assigned to ANY role later via the UI
+  const usedAddresses = new Set([
+    owner.address,
+    ...producers.map((s) => s.address),
+    ...suppliers.map((s) => s.address),
+    ...retailers.map((s) => s.address),
+    ...consumers.map((s) => s.address),
+  ]);
+
+  const extraAddresses = signers
+    .map((s) => s.address)
+    .filter((addr) => !usedAddresses.has(addr));
+
   console.log("Deploying SupplyChain contract...");
   console.log("Deployer:", owner.address);
 
@@ -45,6 +58,7 @@ async function main() {
         suppliers: suppliers.map((s) => s.address),
         retailers: retailers.map((s) => s.address),
         consumers: consumers.map((s) => s.address),
+        extra: extraAddresses,
       };
       
       // Ensure the frontend directory exists
@@ -61,7 +75,7 @@ async function main() {
   } catch (error) {
     console.warn("⚠ Warning: Could not copy contract artifact:", error.message);
   }
-  
+
   console.log("\nRegistering roles...");
   
   console.log("\nRegistering Producers:");

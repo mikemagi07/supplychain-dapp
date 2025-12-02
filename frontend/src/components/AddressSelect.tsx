@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { getAddressLabel, formatAddress } from "../blockchain/contract";
+import { formatAddress } from "../blockchain/contract";
+import { useAuth } from "./AuthContext";
 
 interface AddressSelectProps {
   addresses: string[];
@@ -22,6 +23,78 @@ export default function AddressSelect({
 }: AddressSelectProps) {
   const [isCustom, setIsCustom] = useState(false);
   const [customAddress, setCustomAddress] = useState("");
+  const { registeredAccounts } = useAuth();
+
+  const getDynamicLabel = (addr: string): string => {
+    // First, see if this address is registered under ANY role
+    const allRoles: (keyof typeof registeredAccounts)[] = [
+      "owners",
+      "producers",
+      "suppliers",
+      "retailers",
+      "consumers",
+    ];
+
+    const roleNameMap: Record<(keyof typeof registeredAccounts), string> = {
+      owners: "Owner",
+      producers: "Producer",
+      suppliers: "Supplier",
+      retailers: "Retailer",
+      consumers: "Consumer",
+    };
+
+    const lower = addr.toLowerCase();
+
+    for (const r of allRoles) {
+      const list = registeredAccounts[r] || [];
+      const idx = list.findIndex((a) => a.toLowerCase() === lower);
+      if (idx >= 0) {
+        return `${roleNameMap[r]} ${idx + 1}`;
+      }
+    }
+
+    // Unregistered / extra address – just show shortened address
+    return formatAddress(addr);
+  };
+
+  // If an "extra" address has already been registered under some other role,
+  // hide it from the current dropdown so it doesn't appear as an "unregistered"
+  // candidate for multiple roles.
+  const filterAddressesForRole = (input: string[]): string[] => {
+    if (!role) return input;
+
+    const lowerMap = (list: string[]) => list.map((a) => a.toLowerCase());
+
+    const owners = lowerMap(registeredAccounts.owners);
+    const producers = lowerMap(registeredAccounts.producers);
+    const suppliers = lowerMap(registeredAccounts.suppliers);
+    const retailers = lowerMap(registeredAccounts.retailers);
+    const consumers = lowerMap(registeredAccounts.consumers);
+
+    const allRoleLists: Record<string, string[]> = {
+      owners,
+      producers,
+      suppliers,
+      retailers,
+      consumers,
+    };
+
+    const currentRoleKey = role as keyof typeof allRoleLists;
+
+    return input.filter((addr) => {
+      const addrLower = addr.toLowerCase();
+
+      // If this address is registered under a *different* role, drop it
+      for (const [key, list] of Object.entries(allRoleLists)) {
+        if (key === currentRoleKey) continue;
+        if (list.includes(addrLower)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  };
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (e.target.value === "__custom__") {
@@ -63,8 +136,8 @@ export default function AddressSelect({
             onChange={handleSelectChange}
           >
             <option value="">{placeholder}</option>
-            {addresses.map((addr) => {
-              const addressLabel = getAddressLabel(addr, role);
+            {filterAddressesForRole(addresses).map((addr) => {
+              const addressLabel = getDynamicLabel(addr);
               return (
                 <option key={addr} value={addr}>
                   {addressLabel} ({formatAddress(addr)})

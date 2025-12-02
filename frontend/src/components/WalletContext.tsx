@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { ethers } from "ethers";
 
+export type WalletMode = "local" | "metamask";
+
 type WalletContextType = {
   isConnected: boolean;
   address: string | null;
@@ -9,6 +11,9 @@ type WalletContextType = {
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
   isMetaMaskAvailable: boolean;
+  walletMode: WalletMode;
+  setWalletMode: (mode: WalletMode) => void;
+  useMetaMask: () => boolean; // true when UI should use MetaMask
 };
 
 const WalletContext = createContext<WalletContextType>({
@@ -19,6 +24,9 @@ const WalletContext = createContext<WalletContextType>({
   connectWallet: async () => {},
   disconnectWallet: () => {},
   isMetaMaskAvailable: false,
+  walletMode: "local",
+  setWalletMode: () => {},
+  useMetaMask: () => false,
 });
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -27,19 +35,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [isMetaMaskAvailable, setIsMetaMaskAvailable] = useState(false);
+  const [walletMode, setWalletMode] = useState<WalletMode>("local");
+
+  const useMetaMask = () => walletMode === "metamask" && isConnected;
 
   // Check if MetaMask is available
   useEffect(() => {
     if (typeof window !== "undefined" && window.ethereum) {
       setIsMetaMaskAvailable(true);
-      
+
       // Check if already connected
       checkConnection();
-      
+
       // Listen for account changes
       window.ethereum.on("accountsChanged", handleAccountsChanged);
       window.ethereum.on("chainChanged", () => window.location.reload());
-      
+
       return () => {
         window.ethereum?.removeListener("accountsChanged", handleAccountsChanged);
       };
@@ -88,6 +99,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setSigner(signer);
         setAddress(address);
         setIsConnected(true);
+        setWalletMode("metamask");
       }
     } catch (error: any) {
       console.error("Error connecting wallet:", error);
@@ -104,6 +116,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setSigner(null);
     setAddress(null);
     setIsConnected(false);
+    setWalletMode("local");
   };
 
   return (
@@ -116,6 +129,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         connectWallet,
         disconnectWallet,
         isMetaMaskAvailable,
+        walletMode,
+        setWalletMode,
+        useMetaMask,
       }}
     >
       {children}
