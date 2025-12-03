@@ -32,20 +32,22 @@ export default function ProductDetailsModal({
 
   const loadProduct = async () => {
     const c = getReadOnlyContract();
-    const p = await c.getProduct(Number(productId));
+    // Use getProductExtended to get accurate availableQuantity
+    const p = await c.getProductExtended(Number(productId));
 
     setProduct({
       id: p[0].toString(),
       name: p[1],
       description: p[2],
-      quantity: p[3].toString(),
-      createdAt: new Date(Number(p[4]) * 1000).toLocaleString(),
-      producer: p[5],
-      supplier: p[6],
-      retailer: p[7],
-      consumer: p[8],
-      status: Number(p[9]),
-      shippingInfo: p[10],
+      totalQuantity: p[3].toString(),
+      availableQuantity: p[4].toString(),
+      createdAt: new Date(Number(p[5]) * 1000).toLocaleString(),
+      producer: p[6],
+      supplier: p[7],
+      retailer: p[8],
+      consumer: p[9],
+      status: Number(p[10]),
+      shippingInfo: p[11],
     });
   };
 
@@ -81,7 +83,20 @@ export default function ProductDetailsModal({
           <div className="bg-gray-50 p-4 rounded-lg">
             <p className="mb-1"><b className="text-gray-700">Name:</b> <span className="text-gray-900">{product.name}</span></p>
             <p className="mb-1"><b className="text-gray-700">Description:</b> <span className="text-gray-900">{product.description}</span></p>
-            <p className="mb-1"><b className="text-gray-700">Quantity:</b> <span className="text-gray-900">{product.quantity}</span></p>
+            <p className="mb-1">
+              <b className="text-gray-700">Total Quantity:</b> <span className="text-gray-900">{product.totalQuantity}</span>
+            </p>
+            <p className="mb-1">
+              <b className="text-gray-700">Available Quantity:</b> 
+              <span className={`font-semibold ${Number(product.availableQuantity) > 0 ? "text-green-600" : "text-red-600"}`}>
+                {product.availableQuantity}
+              </span>
+            </p>
+            {Number(product.totalQuantity) > 0 && Number(product.availableQuantity) < Number(product.totalQuantity) && (
+              <p className="mb-1 text-sm text-gray-600">
+                Sold: {Number(product.totalQuantity) - Number(product.availableQuantity)} units
+              </p>
+            )}
             <p><b className="text-gray-700">Created At:</b> <span className="text-gray-900">{product.createdAt}</span></p>
           </div>
 
@@ -108,9 +123,14 @@ export default function ProductDetailsModal({
                 <span className="text-gray-900 font-mono text-xs">{product.retailer || "N/A"}</span>
               </p>
               <p className="flex justify-between">
-                <b className="text-gray-700">Consumer:</b>
+                <b className="text-gray-700">Last Consumer:</b>
                 <span className="text-gray-900 font-mono text-xs">{product.consumer || "N/A"}</span>
               </p>
+              {product.consumer && Number(product.availableQuantity) > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Note: This shows the last consumer. Product may have multiple partial sales.
+                </p>
+              )}
             </div>
           </div>
         </div>

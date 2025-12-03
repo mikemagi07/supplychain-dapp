@@ -498,6 +498,10 @@ contract SupplyChain {
         products[_productId].availableQuantity -= _quantity;
         products[_productId].consumer = msg.sender;
 
+        // Record the sale (same as sellToConsumer)
+        salesRecords[_productId][msg.sender] += _quantity;
+        consumerAcknowledgments[_productId][msg.sender] = false; // Not yet acknowledged
+
         // If all quantity is sold, mark as sold
         if (products[_productId].availableQuantity == 0) {
             products[_productId].status = ProductStatus.SoldToConsumer;

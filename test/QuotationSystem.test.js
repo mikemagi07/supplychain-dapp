@@ -520,6 +520,30 @@ describe("📋 QUOTATION SYSTEM TESTS", function () {
                 supplyChain.connect(consumer1).purchaseFromSurplus(productId, 0)
             ).to.be.revertedWith("Quantity must be greater than 0");
         });
+
+        it("Should record purchase in salesRecords for consumer", async function () {
+            await supplyChain.connect(consumer1).purchaseFromSurplus(productId, 5);
+            
+            const purchaseQty = await supplyChain.getConsumerPurchaseQuantity(productId, consumer1.address);
+            expect(purchaseQty).to.equal(5);
+            
+            // Multiple purchases should accumulate
+            await supplyChain.connect(consumer1).purchaseFromSurplus(productId, 3);
+            const purchaseQty2 = await supplyChain.getConsumerPurchaseQuantity(productId, consumer1.address);
+            expect(purchaseQty2).to.equal(8); // 5 + 3
+        });
+
+        it("Should allow consumer to acknowledge purchase from surplus", async function () {
+            await supplyChain.connect(consumer1).purchaseFromSurplus(productId, 5);
+            
+            const isAcknowledgedBefore = await supplyChain.isPurchaseAcknowledged(productId, consumer1.address);
+            expect(isAcknowledgedBefore).to.be.false;
+            
+            await supplyChain.connect(consumer1).acknowledgePurchase(productId);
+            
+            const isAcknowledgedAfter = await supplyChain.isPurchaseAcknowledged(productId, consumer1.address);
+            expect(isAcknowledgedAfter).to.be.true;
+        });
     });
 
     describe("Available Products Search", function () {

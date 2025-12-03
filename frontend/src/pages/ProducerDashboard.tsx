@@ -7,6 +7,8 @@ import { useAuth } from "../components/AuthContext";
 import AddressSelect from "../components/AddressSelect";
 import ErrorModal from "../components/ErrorModal";
 import InlineError from "../components/InlineError";
+import ProductTemplateSelector from "../components/ProductTemplateSelector";
+import { ProductTemplate } from "../data/productTemplates";
 
 export default function ProducerDashboard() {
   const [name, setName] = useState("");
@@ -16,6 +18,7 @@ export default function ProducerDashboard() {
   const [pendingQuotations, setPendingQuotations] = useState<any[]>([]);
   const [selectedQuotations, setSelectedQuotations] = useState<Set<string>>(new Set());
   const [batchTotalQty, setBatchTotalQty] = useState("");
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   
   // Error modal (for transaction errors)
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -360,7 +363,15 @@ export default function ProducerDashboard() {
           )}
 
           {/* CREATE PRODUCT */}
-          <h2 className="font-semibold text-lg mt-2">Create Product (Manual)</h2>
+          <div className="flex justify-between items-center mt-2">
+            <h2 className="font-semibold text-lg">Create Product</h2>
+            <button
+              onClick={() => setShowTemplateSelector(true)}
+              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 rounded text-sm font-medium"
+            >
+              📋 Use Template
+            </button>
+          </div>
 
           <div>
             <input
@@ -452,6 +463,17 @@ export default function ProducerDashboard() {
           message={errorMessage}
           type={errorType}
           onClose={hideError}
+        />
+      )}
+      {showTemplateSelector && (
+        <ProductTemplateSelector
+          onSelectTemplate={(template: ProductTemplate) => {
+            setName(template.name);
+            setDesc(template.description);
+            setQty(template.defaultQuantity.toString());
+            clearAllFieldErrors();
+          }}
+          onClose={() => setShowTemplateSelector(false)}
         />
       )}
     </>

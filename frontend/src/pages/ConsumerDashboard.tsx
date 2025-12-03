@@ -7,10 +7,14 @@ import { useRole } from "../components/RoleContext";
 import { getLocalSigner } from "../blockchain/contract";
 import ErrorModal from "../components/ErrorModal";
 import InlineError from "../components/InlineError";
+import ProductTemplateSelector from "../components/ProductTemplateSelector";
+import { ProductTemplate } from "../data/productTemplates";
+import useSupplyChainEvents from "../hooks/useSupplyChainEvents";
 
 type AvailableProduct = {
   productId: string;
   availableQuantity: string;
+  productName?: string; // Store name for filtering
 };
 
 type Quotation = {
@@ -29,6 +33,10 @@ export default function ConsumerDashboard() {
   // Browse products
   const [searchName, setSearchName] = useState("");
   const [availableProducts, setAvailableProducts] = useState<AvailableProduct[]>([]);
+  const [allAvailableProducts, setAllAvailableProducts] = useState<AvailableProduct[]>([]); // Cache all products
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [purchaseProductId, setPurchaseProductId] = useState("");
   const [purchaseQuantity, setPurchaseQuantity] = useState("");
 
@@ -36,6 +44,7 @@ export default function ConsumerDashboard() {
   const [quotationName, setQuotationName] = useState("");
   const [quotationDesc, setQuotationDesc] = useState("");
   const [quotationQty, setQuotationQty] = useState("");
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
   // My quotations
   const [myQuotations, setMyQuotations] = useState<Quotation[]>([]);
@@ -113,30 +122,141 @@ export default function ConsumerDashboard() {
     }
   };
 
+  // Load all available products once (cached)
+  const loadAllAvailableProducts = async () => {
+    setIsLoadingProducts(true);
+    try {
+      const contract = getReadOnlyContract();
+      const count = await contract.productCount();
+      
+      const products: AvailableProduct[] = [];
+      const productNames = new Set<string>(); // For suggestions
+      
+      // Load products in batches
+      const batchSize = 10;
+      for (let i = 1; i <= Number(count); i += batchSize) {
+        const batchPromises = [];
+        for (let j = i; j < Math.min(i + batchSize, Number(count) + 1); j++) {
+          batchPromises.push(contract.getProduct(j));
+        }
+        const batchResults = await Promise.all(batchPromises);
+        
+        for (let k = 0; k < batchResults.length; k++) {
+          const p = batchResults[k];
+          const productId = i + k;
+          
+          if (p[0] !== BigInt(0)) {
+            // Check if product is available for sale
+            const status = Number(p[9]);
+            if (status === 5) { // AvailableForSale
+              try {
+                // Get extended info for available quantity
+                const extended = await contract.getProductExtended(productId);
+                const availableQty = Number(extended.availableQuantity);
+                
+                if (availableQty > 0) {
+                  const productName = p[1];
+                  products.push({
+                    productId: productId.toString(),
+                    availableQuantity: availableQty.toString(),
+                    productName: productName, // Store name for filtering
+                  });
+                  productNames.add(productName);
+                }
+              } catch {
+                // Fallback: try exact name search
+                try {
+                  const [productIds, quantities] = await contract.getAvailableProductsByName(p[1]);
+                  for (let idx = 0; idx < productIds.length; idx++) {
+                    if (Number(productIds[idx]) === productId) {
+                      products.push({
+                        productId: productId.toString(),
+                        availableQuantity: quantities[idx].toString(),
+                        productName: p[1], // Store name
+                      });
+                      productNames.add(p[1]);
+                      break;
+                    }
+                  }
+                } catch {
+                  // Skip if can't get quantity
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      setAllAvailableProducts(products);
+      setSearchSuggestions(Array.from(productNames).sort());
+      
+      // If there's a search query, filter immediately
+      if (searchName.trim()) {
+        filterProducts(searchName.trim(), products);
+      } else {
+        setAvailableProducts(products);
+      }
+    } catch (error: any) {
+      console.error("Error loading products:", error);
+      showError("Error loading products: " + (error.message || error));
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
+  // Client-side filtering with partial matching (synchronous)
+  const filterProducts = (query: string, productsToFilter: AvailableProduct[] = allAvailableProducts) => {
+    if (!query.trim()) {
+      setAvailableProducts(productsToFilter);
+      return;
+    }
+
+    const queryLower = query.toLowerCase();
+    const filtered = productsToFilter.filter((p) => {
+      // Match by product name (partial match)
+      if (p.productName && p.productName.toLowerCase().includes(queryLower)) {
+        return true;
+      }
+      // Match by product ID
+      if (p.productId.includes(query)) {
+        return true;
+      }
+      return false;
+    });
+    
+    setAvailableProducts(filtered);
+  };
+
+  // Debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchName.trim()) {
+        filterProducts(searchName.trim());
+      } else {
+        setAvailableProducts(allAvailableProducts);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [searchName]);
+
+  // Load all products on mount and when tab changes
+  useEffect(() => {
+    if (activeTab === "browse") {
+      loadAllAvailableProducts();
+    }
+  }, [activeTab]);
+
   const searchAvailableProducts = async () => {
     clearFieldError("searchName");
     
     if (!searchName.trim()) {
-      setFieldError("searchName", "Please enter a product name to search");
+      // Show all if search is empty
+      setAvailableProducts(allAvailableProducts);
       return;
     }
 
-    try {
-      const contract = getReadOnlyContract();
-      const [productIds, quantities] = await contract.getAvailableProductsByName(searchName);
-      
-      const products: AvailableProduct[] = [];
-      for (let i = 0; i < productIds.length; i++) {
-        products.push({
-          productId: productIds[i].toString(),
-          availableQuantity: quantities[i].toString(),
-        });
-      }
-      setAvailableProducts(products);
-    } catch (error: any) {
-      console.error("Error searching products:", error);
-      showError("Error searching products: " + (error.message || error));
-    }
+    filterProducts(searchName.trim());
   };
 
   const purchaseFromSurplus = async () => {
@@ -165,7 +285,9 @@ export default function ConsumerDashboard() {
       setPurchaseProductId("");
       setPurchaseQuantity("");
       clearAllFieldErrors();
-      searchAvailableProducts(); // Refresh
+      // Refresh available products and purchases
+      loadAllAvailableProducts();
+      loadMyPurchases(); // Refresh purchases list
     } catch (error: any) {
       console.error("Error purchasing:", error);
       showError("Error purchasing: " + (error.message || error));
@@ -272,16 +394,30 @@ export default function ConsumerDashboard() {
   const loadMyPurchases = async () => {
     try {
       const signer = await getActiveSigner();
-      if (!signer) return;
+      if (!signer) {
+        console.log("No signer available for loadMyPurchases");
+        return;
+      }
 
       const contract = getReadOnlyContract();
       const consumerAddress = await signer.getAddress();
+      console.log("Loading purchases for consumer:", consumerAddress);
+      
       const count = await contract.productCount();
+      console.log("Total products:", Number(count));
       
       const purchases: any[] = [];
       for (let i = 1; i <= Number(count); i++) {
         try {
+          // Check if product exists first
+          const productCheck = await contract.getProduct(i);
+          if (productCheck[0] === BigInt(0)) {
+            continue; // Skip non-existent products
+          }
+
           const quantity = await contract.getConsumerPurchaseQuantity(i, consumerAddress);
+          console.log(`Product ${i}: purchase quantity = ${quantity.toString()}`);
+          
           if (Number(quantity) > 0) {
             const product = await contract.getProductExtended(i);
             const isAcknowledged = await contract.isPurchaseAcknowledged(i, consumerAddress);
@@ -293,14 +429,19 @@ export default function ConsumerDashboard() {
               quantity: quantity.toString(),
               isAcknowledged,
             });
+            console.log(`Added purchase: Product ${i}, Quantity: ${quantity.toString()}`);
           }
-        } catch (e) {
-          // Skip invalid products
+        } catch (e: any) {
+          // Log error but continue
+          console.warn(`Error checking product ${i}:`, e.message || e);
         }
       }
+      
+      console.log("Total purchases found:", purchases.length);
       setMyPurchases(purchases);
     } catch (error: any) {
       console.error("Error loading purchases:", error);
+      showError("Error loading purchases: " + (error.message || error));
     }
   };
 
@@ -328,8 +469,22 @@ export default function ConsumerDashboard() {
       loadMyQuotations();
     } else if (activeTab === "purchases") {
       loadMyPurchases();
+    } else if (activeTab === "browse") {
+      loadAllAvailableProducts();
     }
   }, [activeTab]);
+
+  // Auto-refresh on blockchain events
+  useSupplyChainEvents(() => {
+    // Refresh purchases if on purchases tab
+    if (activeTab === "purchases") {
+      loadMyPurchases();
+    }
+    // Refresh available products if on browse tab
+    if (activeTab === "browse") {
+      loadAllAvailableProducts();
+    }
+  });
 
   // Sync selectedProduct with local productId state
   useEffect(() => {
@@ -418,39 +573,101 @@ export default function ConsumerDashboard() {
           <div className="space-y-4">
             <h2 className="font-semibold text-lg">Search Available Products</h2>
             
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <input
-                  className={`w-full px-3 py-2 bg-gray-800 border rounded ${
-                    fieldErrors.searchName ? "border-red-500" : "border-gray-700"
-                  }`}
-                  placeholder="Product name"
-                  value={searchName}
-                  onChange={(e) => {
-                    setSearchName(e.target.value);
-                    clearFieldError("searchName");
+            <div className="space-y-2">
+              <div className="flex gap-2 relative">
+                <div className="flex-1 relative">
+                  <input
+                    className={`w-full px-3 py-2 bg-gray-800 border rounded ${
+                      fieldErrors.searchName ? "border-red-500" : "border-gray-700"
+                    }`}
+                    placeholder="Search by product name or ID (partial match supported)..."
+                    value={searchName}
+                    onChange={(e) => {
+                      setSearchName(e.target.value);
+                      clearFieldError("searchName");
+                      setShowSuggestions(e.target.value.length > 0);
+                    }}
+                    onFocus={() => {
+                      if (searchName.length > 0) setShowSuggestions(true);
+                    }}
+                    onBlur={() => {
+                      // Delay to allow click on suggestion
+                      setTimeout(() => setShowSuggestions(false), 200);
+                    }}
+                  />
+                  
+                  {/* Autocomplete Suggestions */}
+                  {showSuggestions && searchSuggestions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {searchSuggestions
+                        .filter((name) => 
+                          name.toLowerCase().includes(searchName.toLowerCase())
+                        )
+                        .slice(0, 8) // Limit to 8 suggestions
+                        .map((name, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setSearchName(name);
+                              setShowSuggestions(false);
+                              filterProducts(name);
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-700 text-sm text-gray-300 border-b border-gray-700 last:border-b-0"
+                          >
+                            {name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  
+                  <InlineError message={fieldErrors.searchName || ""} />
+                </div>
+                <button
+                  onClick={searchAvailableProducts}
+                  disabled={isLoadingProducts}
+                  className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                  {isLoadingProducts ? "Loading..." : "Search"}
+                </button>
+                <button
+                  onClick={() => {
+                    setSearchName("");
+                    setAvailableProducts(allAvailableProducts);
                   }}
-                />
-                <InlineError message={fieldErrors.searchName || ""} />
+                  className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg"
+                  title="Clear search"
+                >
+                  Clear
+                </button>
               </div>
-              <button
-                onClick={searchAvailableProducts}
-                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
-              >
-                Search
-              </button>
+              
+              {/* Results info */}
+              {availableProducts.length > 0 && (
+                <p className="text-sm text-gray-400">
+                  Found {availableProducts.length} product{availableProducts.length !== 1 ? 's' : ''}
+                  {searchName && ` matching "${searchName}"`}
+                </p>
+              )}
             </div>
 
-            {availableProducts.length > 0 && (
+            {isLoadingProducts ? (
+              <div className="text-center py-8">
+                <p className="text-gray-400">Loading available products...</p>
+              </div>
+            ) : availableProducts.length > 0 ? (
               <div className="space-y-2">
                 <h3 className="font-medium">Available Products:</h3>
                 {availableProducts.map((product) => (
                   <div
                     key={product.productId}
-                    className="bg-gray-800 p-3 rounded border border-gray-700"
+                    className="bg-gray-800 p-3 rounded border border-gray-700 hover:border-blue-500 transition-colors"
                   >
-                    <p className="text-sm">
-                      Product ID: {product.productId} | Available: {product.availableQuantity} units
+                    <p className="text-sm font-medium mb-1">
+                      {product.productName || `Product #${product.productId}`}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      ID: {product.productId} | Available: {product.availableQuantity} units
                     </p>
                     <div className="mt-2 flex gap-2">
                       <div className="flex-1">
@@ -481,10 +698,35 @@ export default function ConsumerDashboard() {
                   </div>
                 ))}
               </div>
+            ) : searchName ? (
+              <div className="text-center py-8">
+                <p className="text-gray-400">No products found matching "{searchName}"</p>
+                <button
+                  onClick={() => {
+                    setSearchName("");
+                    setAvailableProducts(allAvailableProducts);
+                  }}
+                  className="mt-2 text-blue-400 hover:text-blue-300 text-sm"
+                >
+                  Show all available products
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-400">No products available for sale at the moment.</p>
+              </div>
             )}
 
             <div className="border-t border-gray-700 pt-4 mt-4">
-              <h2 className="font-semibold text-lg mb-2">Create Quotation Request</h2>
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="font-semibold text-lg">Create Quotation Request</h2>
+                <button
+                  onClick={() => setShowTemplateSelector(true)}
+                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 rounded text-sm font-medium"
+                >
+                  📋 Use Template
+                </button>
+              </div>
               <p className="text-sm text-gray-400 mb-3">
                 Can't find what you need? Request a product and producers will fulfill it.
               </p>
@@ -693,6 +935,17 @@ export default function ConsumerDashboard() {
           message={errorMessage}
           type={errorType}
           onClose={hideError}
+        />
+      )}
+      {showTemplateSelector && (
+        <ProductTemplateSelector
+          onSelectTemplate={(template: ProductTemplate) => {
+            setQuotationName(template.name);
+            setQuotationDesc(template.description);
+            setQuotationQty(template.defaultQuantity.toString());
+            clearAllFieldErrors();
+          }}
+          onClose={() => setShowTemplateSelector(false)}
         />
       )}
     </>
