@@ -9,10 +9,12 @@ import AddressSelect from "../components/AddressSelect";
 export default function RetailerDashboard() {
   const [productId, setProductId] = useState("");
   const [consumer, setConsumer] = useState("");
+  const [saleQuantity, setSaleQuantity] = useState("");
   const [fulfillProductId, setFulfillProductId] = useState("");
   const [productsWithQuotations, setProductsWithQuotations] = useState<any[]>([]);
   const [selectedQuotationsForFulfill, setSelectedQuotationsForFulfill] = useState<Set<string>>(new Set());
   const [surplusProducts, setSurplusProducts] = useState<any[]>([]);
+  const [storeProducts, setStoreProducts] = useState<any[]>([]);
   const role = useRole();
   const { signer: metaMaskSigner, walletMode, useMetaMask } = useWallet();
   const { user, registeredAccounts } = useAuth();
@@ -86,12 +88,54 @@ export default function RetailerDashboard() {
   };
 
   const sell = async () => {
+    if (!productId || !consumer || !saleQuantity) {
+      alert("Please fill all fields: Product ID, Consumer, and Quantity");
+      return;
+    }
+
     const signer = await ensureSigner();
     if (!signer) return;
-    const contract = getContract(role, signer, true);
-    const tx = await contract.sellToConsumer(Number(productId), consumer);
-    await tx.wait();
-    alert("Sold to consumer");
+
+    try {
+      const contract = getContract(role, signer, true);
+      const tx = await contract.sellToConsumer(Number(productId), consumer, Number(saleQuantity));
+      await tx.wait();
+      alert("Sold to consumer");
+      setProductId("");
+      setConsumer("");
+      setSaleQuantity("");
+      loadStoreProducts();
+      loadSurplusInventory();
+    } catch (error: any) {
+      console.error("Error selling:", error);
+      alert("Error selling: " + (error.message || error));
+    }
+  };
+
+  const loadStoreProducts = async () => {
+    try {
+      const contract = getReadOnlyContract();
+      const signer = await ensureSigner();
+      if (!signer) return;
+
+      const retailerAddress = await signer.getAddress();
+      const [productIds, names, descriptions, totalQuantities, availableQuantities] = 
+        await contract.getRetailerStoreProducts(retailerAddress);
+      
+      const products: any[] = [];
+      for (let i = 0; i < productIds.length; i++) {
+        products.push({
+          productId: productIds[i].toString(),
+          name: names[i],
+          description: descriptions[i],
+          totalQuantity: totalQuantities[i].toString(),
+          availableQuantity: availableQuantities[i].toString(),
+        });
+      }
+      setStoreProducts(products);
+    } catch (error: any) {
+      console.error("Error loading store products:", error);
+    }
   };
 
   const loadProductsWithQuotations = async () => {
@@ -210,6 +254,7 @@ export default function RetailerDashboard() {
   useEffect(() => {
     loadProductsWithQuotations();
     loadSurplusInventory();
+    loadStoreProducts();
   }, []);
 
   return (
@@ -218,6 +263,40 @@ export default function RetailerDashboard() {
       description="Receive goods, mark them for sale, fulfill quotations, and sell to consumers."
     >
       <div className="space-y-6">
+        {/* STORE PRODUCTS */}
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="font-semibold text-lg">My Store Products</h2>
+            <button
+              onClick={loadStoreProducts}
+              className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {storeProducts.length === 0 ? (
+            <p className="text-sm text-gray-400 mb-4">No products in store</p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {storeProducts.map((product) => (
+                <div
+                  key={product.productId}
+                  className="bg-gray-800 p-3 rounded border border-gray-700"
+                >
+                  <p className="font-medium">
+                    Product #{product.productId}: {product.name}
+                  </p>
+                  <p className="text-sm text-gray-400">{product.description}</p>
+                  <p className="text-sm text-gray-300 mt-1">
+                    Available: {product.availableQuantity} / {product.totalQuantity} units
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* FULFILL QUOTATIONS */}
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -349,6 +428,7 @@ export default function RetailerDashboard() {
             Add to Store
           </button>
 
+          <h3 className="font-medium text-md mt-4 mb-2">Sell to Consumer</h3>
           <AddressSelect
             addresses={getAddressesForRole("consumers", includeMetaMask)}
             value={consumer}
@@ -358,11 +438,21 @@ export default function RetailerDashboard() {
             role="consumers"
           />
 
+          <input
+            type="number"
+            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded mb-2"
+            placeholder="Quantity to sell"
+            value={saleQuantity}
+            onChange={(e) => setSaleQuantity(e.target.value)}
+            min="1"
+          />
+
           <button
             onClick={sell}
-            className="w-full bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg"
+            disabled={!productId || !consumer || !saleQuantity}
+            className="w-full bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg disabled:bg-gray-600"
           >
-            Sell to Consumer (Direct)
+            Sell to Consumer (Partial Quantity)
           </button>
         </div>
       </div>

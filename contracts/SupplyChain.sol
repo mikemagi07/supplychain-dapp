@@ -83,6 +83,9 @@ contract SupplyChain {
     event QuotationFulfilled(uint256 indexed quotationId, uint256 indexed productId, address indexed consumer);
     event QuotationsBatchApproved(uint256[] quotationIds, uint256 indexed productId, address indexed producer);
     
+    // Consumer acknowledgment event
+    event PurchaseAcknowledged(uint256 indexed productId, address indexed consumer);
+    
     // Registration events
     event OwnerAdded(address indexed owner);
     event OwnerRemoved(address indexed owner);
@@ -248,13 +251,45 @@ contract SupplyChain {
         emit ProductAddedToStore(_productId);
     }
 
-    function sellToConsumer(uint256 _productId, address _consumer) public onlyRetailer {
+    // Mapping to track consumer acknowledgments
+    mapping(uint256 => mapping(address => bool)) public consumerAcknowledgments; // productId => consumer => acknowledged
+    mapping(uint256 => mapping(address => uint256)) public salesRecords; // productId => consumer => quantity sold
+
+    function sellToConsumer(uint256 _productId, address _consumer, uint256 _quantity) public onlyRetailer {
+        require(products[_productId].id != 0, "Product does not exist");
+        require(products[_productId].retailer == msg.sender, "You are not the retailer of this product");
+        require(products[_productId].status == ProductStatus.AvailableForSale, "Product must be available for sale");
+        require(products[_productId].availableQuantity >= _quantity, "Insufficient available quantity");
+        require(_quantity > 0, "Quantity must be greater than 0");
+
+        products[_productId].availableQuantity -= _quantity;
+        products[_productId].consumer = _consumer; // Track last consumer (for backward compatibility)
+        
+        // Record the sale
+        salesRecords[_productId][_consumer] += _quantity;
+        consumerAcknowledgments[_productId][_consumer] = false; // Not yet acknowledged
+
+        // If all quantity is sold, mark as sold
+        if (products[_productId].availableQuantity == 0) {
+            products[_productId].status = ProductStatus.SoldToConsumer;
+        }
+
+        emit ProductSoldToConsumer(_productId, _consumer);
+    }
+
+    // Backward compatibility - sells entire available quantity
+    function sellToConsumerLegacy(uint256 _productId, address _consumer) public onlyRetailer {
         require(products[_productId].id != 0, "Product does not exist");
         require(products[_productId].retailer == msg.sender, "You are not the retailer of this product");
         require(products[_productId].status == ProductStatus.AvailableForSale, "Product must be available for sale");
 
+        uint256 quantity = products[_productId].availableQuantity;
+        products[_productId].availableQuantity = 0;
         products[_productId].consumer = _consumer;
         products[_productId].status = ProductStatus.SoldToConsumer;
+        
+        salesRecords[_productId][_consumer] = quantity;
+        consumerAcknowledgments[_productId][_consumer] = false;
 
         emit ProductSoldToConsumer(_productId, _consumer);
     }
@@ -597,6 +632,82 @@ contract SupplyChain {
         shippingInfo = product.shippingInfo;
         quotationIds = product.quotationIds;
         isFromQuotation = product.isFromQuotation;
+    }
+
+    // Consumer acknowledgment
+    /// @notice Consumer acknowledges receipt of purchased product
+    /// @param _productId Product ID
+    function acknowledgePurchase(uint256 _productId) public {
+        require(products[_productId].id != 0, "Product does not exist");
+        require(salesRecords[_productId][msg.sender] > 0, "No purchase record found for this product");
+        require(!consumerAcknowledgments[_productId][msg.sender], "Purchase already acknowledged");
+
+        consumerAcknowledgments[_productId][msg.sender] = true;
+        emit PurchaseAcknowledged(_productId, msg.sender);
+    }
+
+    /// @notice Get quantity sold to a specific consumer for a product
+    /// @param _productId Product ID
+    /// @param _consumer Consumer address
+    function getConsumerPurchaseQuantity(uint256 _productId, address _consumer) public view returns (uint256) {
+        return salesRecords[_productId][_consumer];
+    }
+
+    /// @notice Check if consumer has acknowledged purchase
+    /// @param _productId Product ID
+    /// @param _consumer Consumer address
+    function isPurchaseAcknowledged(uint256 _productId, address _consumer) public view returns (bool) {
+        return consumerAcknowledgments[_productId][_consumer];
+    }
+
+    /// @notice Get all products in retailer's store (AvailableForSale)
+    /// @param _retailer Retailer address
+    function getRetailerStoreProducts(address _retailer) public view returns (
+        uint256[] memory productIds,
+        string[] memory names,
+        string[] memory descriptions,
+        uint256[] memory totalQuantities,
+        uint256[] memory availableQuantities
+    ) {
+        uint256[] memory tempIds = new uint256[](productCount);
+        string[] memory tempNames = new string[](productCount);
+        string[] memory tempDescriptions = new string[](productCount);
+        uint256[] memory tempTotalQuantities = new uint256[](productCount);
+        uint256[] memory tempAvailableQuantities = new uint256[](productCount);
+        uint256 count = 0;
+
+        for (uint256 i = 1; i <= productCount; i++) {
+            if (
+                products[i].id != 0 &&
+                products[i].retailer == _retailer &&
+                products[i].status == ProductStatus.AvailableForSale &&
+                products[i].availableQuantity > 0
+            ) {
+                tempIds[count] = i;
+                tempNames[count] = products[i].name;
+                tempDescriptions[count] = products[i].description;
+                tempTotalQuantities[count] = products[i].totalQuantity;
+                tempAvailableQuantities[count] = products[i].availableQuantity;
+                count++;
+            }
+        }
+
+        // Resize arrays to actual count
+        productIds = new uint256[](count);
+        names = new string[](count);
+        descriptions = new string[](count);
+        totalQuantities = new uint256[](count);
+        availableQuantities = new uint256[](count);
+        
+        for (uint256 i = 0; i < count; i++) {
+            productIds[i] = tempIds[i];
+            names[i] = tempNames[i];
+            descriptions[i] = tempDescriptions[i];
+            totalQuantities[i] = tempTotalQuantities[i];
+            availableQuantities[i] = tempAvailableQuantities[i];
+        }
+
+        return (productIds, names, descriptions, totalQuantities, availableQuantities);
     }
 }
 

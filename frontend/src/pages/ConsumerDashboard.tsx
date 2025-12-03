@@ -22,7 +22,7 @@ type Quotation = {
 };
 
 export default function ConsumerDashboard() {
-  const [activeTab, setActiveTab] = useState<"browse" | "quotation" | "verify">("browse");
+  const [activeTab, setActiveTab] = useState<"browse" | "quotation" | "verify" | "purchases">("browse");
   
   // Browse products
   const [searchName, setSearchName] = useState("");
@@ -37,6 +37,9 @@ export default function ConsumerDashboard() {
 
   // My quotations
   const [myQuotations, setMyQuotations] = useState<Quotation[]>([]);
+
+  // My purchases
+  const [myPurchases, setMyPurchases] = useState<any[]>([]);
 
   // Verify product
   const [productId, setProductId] = useState("");
@@ -173,9 +176,62 @@ export default function ConsumerDashboard() {
     setDetails(res);
   };
 
+  const loadMyPurchases = async () => {
+    try {
+      const signer = await getActiveSigner();
+      if (!signer) return;
+
+      const contract = getReadOnlyContract();
+      const consumerAddress = await signer.getAddress();
+      const count = await contract.productCount();
+      
+      const purchases: any[] = [];
+      for (let i = 1; i <= Number(count); i++) {
+        try {
+          const quantity = await contract.getConsumerPurchaseQuantity(i, consumerAddress);
+          if (Number(quantity) > 0) {
+            const product = await contract.getProductExtended(i);
+            const isAcknowledged = await contract.isPurchaseAcknowledged(i, consumerAddress);
+            
+            purchases.push({
+              productId: i.toString(),
+              name: product[1],
+              description: product[2],
+              quantity: quantity.toString(),
+              isAcknowledged,
+            });
+          }
+        } catch (e) {
+          // Skip invalid products
+        }
+      }
+      setMyPurchases(purchases);
+    } catch (error: any) {
+      console.error("Error loading purchases:", error);
+    }
+  };
+
+  const acknowledgePurchase = async (productId: string) => {
+    const signer = await getActiveSigner();
+    if (!signer) return;
+
+    try {
+      const contract = getContract(role, signer, true);
+      const tx = await contract.acknowledgePurchase(Number(productId));
+      await tx.wait();
+      alert("Purchase acknowledged!");
+      loadMyPurchases();
+    } catch (error: any) {
+      console.error("Error acknowledging purchase:", error);
+      alert("Error acknowledging purchase: " + (error.message || error));
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "quotation") {
       loadMyQuotations();
+    } else if (activeTab === "purchases") {
+      loadMyPurchases();
     }
   }, [activeTab]);
 
@@ -230,6 +286,16 @@ export default function ConsumerDashboard() {
             }`}
           >
             Verify Product
+          </button>
+          <button
+            onClick={() => setActiveTab("purchases")}
+            className={`px-4 py-2 font-medium ${
+              activeTab === "purchases"
+                ? "border-b-2 border-blue-500 text-blue-400"
+                : "text-gray-400 hover:text-gray-300"
+            }`}
+          >
+            My Purchases
           </button>
         </div>
 
@@ -399,6 +465,61 @@ export default function ConsumerDashboard() {
                   <strong>Status:</strong> {details[9].toString()} <br />
                   <strong>Quantity:</strong> {details[3].toString()}
                 </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* My Purchases Tab */}
+        {activeTab === "purchases" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="font-semibold text-lg">My Purchases</h2>
+              <button
+                onClick={loadMyPurchases}
+                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {myPurchases.length === 0 ? (
+              <p className="text-gray-400 text-sm">No purchases found.</p>
+            ) : (
+              <div className="space-y-3">
+                {myPurchases.map((purchase) => (
+                  <div
+                    key={purchase.productId}
+                    className="bg-gray-800 p-4 rounded border border-gray-700"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-medium">Product #{purchase.productId}: {purchase.name}</p>
+                        <p className="text-sm text-gray-400">{purchase.description}</p>
+                        <p className="text-sm text-gray-300 mt-1">
+                          Quantity: {purchase.quantity} units
+                        </p>
+                      </div>
+                      {purchase.isAcknowledged ? (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-green-300 text-green-800">
+                          Acknowledged
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-300 text-yellow-800">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+                    {!purchase.isAcknowledged && (
+                      <button
+                        onClick={() => acknowledgePurchase(purchase.productId)}
+                        className="mt-2 w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg"
+                      >
+                        Acknowledge Purchase
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
