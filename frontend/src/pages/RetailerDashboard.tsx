@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getContract, ALL_ADDRESSES, getLocalSigner, getAddressesForRole, getReadOnlyContract } from "../blockchain/contract";
 import DashboardLayout from "../components/DashboardLayout";
 import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
 import { useAuth } from "../components/AuthContext";
 import AddressSelect from "../components/AddressSelect";
+import ErrorModal from "../components/ErrorModal";
+import InlineError from "../components/InlineError";
 
 export default function RetailerDashboard() {
   const [productId, setProductId] = useState("");
@@ -15,7 +17,44 @@ export default function RetailerDashboard() {
   const [selectedQuotationsForFulfill, setSelectedQuotationsForFulfill] = useState<Set<string>>(new Set());
   const [surplusProducts, setSurplusProducts] = useState<any[]>([]);
   const [storeProducts, setStoreProducts] = useState<any[]>([]);
+  
+  // Error modal (for transaction errors)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<"error" | "success" | "info">("error");
+
+  // Inline field errors
+  const [fieldErrors, setFieldErrors] = useState<{
+    productId?: string;
+    consumer?: string;
+    saleQuantity?: string;
+  }>({});
+
   const role = useRole();
+
+  const showError = (message: string, type: "error" | "success" | "info" = "error") => {
+    setErrorMessage(message);
+    setErrorType(type);
+  };
+
+  const hideError = () => {
+    setErrorMessage(null);
+  };
+
+  const setFieldError = (field: keyof typeof fieldErrors, message: string) => {
+    setFieldErrors(prev => ({ ...prev, [field]: message }));
+  };
+
+  const clearFieldError = (field: keyof typeof fieldErrors) => {
+    setFieldErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[field];
+      return newErrors;
+    });
+  };
+
+  const clearAllFieldErrors = () => {
+    setFieldErrors({});
+  };
   const { signer: metaMaskSigner, walletMode, useMetaMask } = useWallet();
   const { user, registeredAccounts } = useAuth();
   const includeMetaMask = useMetaMask();
@@ -23,7 +62,7 @@ export default function RetailerDashboard() {
   const ensureSigner = async () => {
     if (walletMode === "metamask") {
       if (!metaMaskSigner) {
-        alert("Please connect MetaMask to perform this action.");
+        showError("Please connect MetaMask to perform this action.");
         return null;
       }
       
@@ -41,14 +80,14 @@ export default function RetailerDashboard() {
         const isRegisteredInContract = await contract.retailers(metaMaskAddress);
         
         if (!isRegisteredInContract) {
-          alert(`This MetaMask address (${metaMaskAddress.slice(0, 6)}...${metaMaskAddress.slice(-4)}) is not registered as a retailer in the contract. Please use an owner account to register it first, or use a different MetaMask account that is registered as a retailer.\n\nNote: If you just deployed, make sure the contract was deployed with MetaMask addresses registered.`);
+          showError(`This MetaMask address (${metaMaskAddress.slice(0, 6)}...${metaMaskAddress.slice(-4)}) is not registered as a retailer in the contract. Please use an owner account to register it first, or use a different MetaMask account that is registered as a retailer.\n\nNote: If you just deployed, make sure the contract was deployed with MetaMask addresses registered.`);
           return null;
         }
       } catch (error: any) {
         console.error("Error checking retailer registration:", error);
         // If we can't check, at least verify it's in the list
         if (!isInList) {
-          alert(`Unable to verify retailer registration. This address may not be registered. Please try refreshing the page or contact an owner to register this address.`);
+          showError(`Unable to verify retailer registration. This address may not be registered. Please try refreshing the page or contact an owner to register this address.`);
           return null;
         }
       }
@@ -57,58 +96,117 @@ export default function RetailerDashboard() {
     }
 
     if (!user) {
-      alert("Please login as a local retailer first.");
+      showError("Please login as a local retailer first.");
       return null;
     }
 
     try {
       return await getLocalSigner(user.address);
     } catch (e: any) {
-      alert("Unable to create local signer: " + (e.message || e));
+      showError("Unable to create local signer: " + (e.message || e));
       return null;
     }
   };
 
-  const receive = async () => {
-    const signer = await ensureSigner();
-    if (!signer) return;
-    const contract = getContract(role, signer, true);
-    const tx = await contract.receiveProductFromSupplier(Number(productId));
-    await tx.wait();
-    alert("Received from Supplier");
-  };
-
-  const add = async () => {
-    const signer = await ensureSigner();
-    if (!signer) return;
-    const contract = getContract(role, signer, true);
-    const tx = await contract.addToStore(Number(productId));
-    await tx.wait();
-    alert("Product added to store");
-  };
-
-  const sell = async () => {
-    if (!productId || !consumer || !saleQuantity) {
-      alert("Please fill all fields: Product ID, Consumer, and Quantity");
+  const receive = async (pid?: string) => {
+    const idToUse = pid || productId;
+    clearFieldError("productId");
+    
+    if (!idToUse) {
+      setFieldError("productId", "Please select or enter a product ID");
       return;
     }
+    
+    if (isNaN(Number(idToUse)) || Number(idToUse) <= 0) {
+      setFieldError("productId", "Please enter a valid product ID (positive number)");
+      return;
+    }
+    
+    const signer = await ensureSigner();
+    if (!signer) return;
+    try {
+      const contract = getContract(role, signer, true);
+      const tx = await contract.receiveProductFromSupplier(Number(idToUse));
+      await tx.wait();
+      showError("Received from Supplier", "success");
+      clearAllFieldErrors();
+      loadStoreProducts();
+    } catch (error: any) {
+      console.error("Error receiving product:", error);
+      showError("Error receiving product: " + (error.message || error));
+    }
+  };
+
+  const add = async (pid?: string) => {
+    const idToUse = pid || productId;
+    clearFieldError("productId");
+    
+    if (!idToUse) {
+      setFieldError("productId", "Please select or enter a product ID");
+      return;
+    }
+    
+    if (isNaN(Number(idToUse)) || Number(idToUse) <= 0) {
+      setFieldError("productId", "Please enter a valid product ID (positive number)");
+      return;
+    }
+    
+    const signer = await ensureSigner();
+    if (!signer) return;
+    try {
+      const contract = getContract(role, signer, true);
+      const tx = await contract.addToStore(Number(idToUse));
+      await tx.wait();
+      showError("Product added to store", "success");
+      clearAllFieldErrors();
+      loadStoreProducts();
+    } catch (error: any) {
+      console.error("Error adding to store:", error);
+      showError("Error adding to store: " + (error.message || error));
+    }
+  };
+
+  const sell = async (pid?: string) => {
+    const idToUse = pid || productId;
+    clearFieldError("productId");
+    clearFieldError("consumer");
+    clearFieldError("saleQuantity");
+    
+    let hasError = false;
+    if (!idToUse) {
+      setFieldError("productId", "Please select or enter a product ID");
+      hasError = true;
+    } else if (isNaN(Number(idToUse)) || Number(idToUse) <= 0) {
+      setFieldError("productId", "Please enter a valid product ID (positive number)");
+      hasError = true;
+    }
+    if (!consumer) {
+      setFieldError("consumer", "Please select a consumer");
+      hasError = true;
+    }
+    if (!saleQuantity || Number(saleQuantity) <= 0) {
+      setFieldError("saleQuantity", "Please enter a valid quantity (greater than 0)");
+      hasError = true;
+    }
+    if (hasError) return;
 
     const signer = await ensureSigner();
     if (!signer) return;
 
     try {
       const contract = getContract(role, signer, true);
-      const tx = await contract.sellToConsumer(Number(productId), consumer, Number(saleQuantity));
+      const tx = await contract.sellToConsumer(Number(idToUse), consumer, Number(saleQuantity));
       await tx.wait();
-      alert("Sold to consumer");
+      showError("Sold to consumer", "success");
       setProductId("");
       setConsumer("");
       setSaleQuantity("");
+      clearAllFieldErrors();
       loadStoreProducts();
       loadSurplusInventory();
     } catch (error: any) {
       console.error("Error selling:", error);
-      alert("Error selling: " + (error.message || error));
+      showError("Error selling: " + (error.message || error));
     }
   };
 
@@ -227,7 +325,7 @@ export default function RetailerDashboard() {
 
   const fulfillQuotations = async () => {
     if (!fulfillProductId || selectedQuotationsForFulfill.size === 0) {
-      alert("Please select a product and quotations to fulfill");
+      showError("Please select a product and quotations to fulfill");
       return;
     }
 
@@ -240,16 +338,19 @@ export default function RetailerDashboard() {
       
       const tx = await contract.fulfillQuotations(Number(fulfillProductId), quotationIds);
       await tx.wait();
-      alert("Quotations fulfilled successfully!");
+      showError("Quotations fulfilled successfully!", "success");
       setSelectedQuotationsForFulfill(new Set());
       setFulfillProductId("");
       loadProductsWithQuotations();
       loadSurplusInventory();
     } catch (error: any) {
       console.error("Error fulfilling quotations:", error);
-      alert("Error fulfilling quotations: " + (error.message || error));
+      showError("Error fulfilling quotations: " + (error.message || error));
     }
   };
+
+  // Track selectedProduct from DashboardLayout
+  const [selectedProductFromLayout, setSelectedProductFromLayout] = useState<string | null>(null);
 
   useEffect(() => {
     loadProductsWithQuotations();
@@ -257,12 +358,30 @@ export default function RetailerDashboard() {
     loadStoreProducts();
   }, []);
 
+  // Sync selectedProduct with local productId state
+  useEffect(() => {
+    if (selectedProductFromLayout) {
+      setProductId(selectedProductFromLayout);
+    }
+  }, [selectedProductFromLayout]);
+
   return (
-    <DashboardLayout
-      title="Retailer Dashboard"
-      description="Receive goods, mark them for sale, fulfill quotations, and sell to consumers."
-    >
-      <div className="space-y-6">
+    <>
+      <DashboardLayout
+        title="Retailer Dashboard"
+        description="Receive goods, mark them for sale, fulfill quotations, and sell to consumers."
+      >
+        {({ selectedProduct }) => {
+          // Update selectedProduct state when it changes from layout
+          if (selectedProduct !== selectedProductFromLayout) {
+            setSelectedProductFromLayout(selectedProduct);
+          }
+
+          // Use selectedProduct if available, otherwise use local productId
+          const currentProductId = selectedProduct || productId;
+
+          return (
+        <div className="space-y-6">
         {/* STORE PRODUCTS */}
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -407,22 +526,30 @@ export default function RetailerDashboard() {
         {/* STANDARD OPERATIONS */}
         <div className="border-t border-gray-700 pt-4">
           <h2 className="font-semibold text-lg mb-2">Standard Operations</h2>
-          <input
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded mb-2"
-            placeholder="Product ID"
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-          />
+          <div>
+            <input
+              className={`w-full px-3 py-2 bg-gray-800 border rounded mb-1 ${
+                fieldErrors.productId ? "border-red-500" : "border-gray-700"
+              }`}
+              placeholder="Product ID"
+              value={currentProductId}
+              onChange={(e) => {
+                setProductId(e.target.value);
+                clearFieldError("productId");
+              }}
+            />
+            <InlineError message={fieldErrors.productId || ""} />
+          </div>
 
           <button
-            onClick={receive}
+            onClick={() => receive(currentProductId)}
             className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg mb-2"
           >
             Receive from Supplier
           </button>
 
           <button
-            onClick={add}
+            onClick={() => add(currentProductId)}
             className="w-full bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg mb-2"
           >
             Add to Store
@@ -432,30 +559,52 @@ export default function RetailerDashboard() {
           <AddressSelect
             addresses={getAddressesForRole("consumers", includeMetaMask)}
             value={consumer}
-            onChange={setConsumer}
+            onChange={(value) => {
+              setConsumer(value);
+              clearFieldError("consumer");
+            }}
             placeholder="Select Consumer Address"
             label="Consumer Address"
             role="consumers"
+            error={fieldErrors.consumer}
           />
 
-          <input
-            type="number"
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded mb-2"
-            placeholder="Quantity to sell"
-            value={saleQuantity}
-            onChange={(e) => setSaleQuantity(e.target.value)}
-            min="1"
-          />
+          <div>
+            <input
+              type="number"
+              className={`w-full px-3 py-2 bg-gray-800 border rounded mb-1 ${
+                fieldErrors.saleQuantity ? "border-red-500" : "border-gray-700"
+              }`}
+              placeholder="Quantity to sell"
+              value={saleQuantity}
+              onChange={(e) => {
+                setSaleQuantity(e.target.value);
+                clearFieldError("saleQuantity");
+              }}
+              min="1"
+            />
+            <InlineError message={fieldErrors.saleQuantity || ""} />
+          </div>
 
           <button
-            onClick={sell}
-            disabled={!productId || !consumer || !saleQuantity}
+            onClick={() => sell(currentProductId)}
+            disabled={!currentProductId || !consumer || !saleQuantity}
             className="w-full bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg disabled:bg-gray-600"
           >
             Sell to Consumer (Partial Quantity)
           </button>
         </div>
       </div>
-    </DashboardLayout>
+          );
+        }}
+      </DashboardLayout>
+      {errorMessage && (
+        <ErrorModal
+          message={errorMessage}
+          type={errorType}
+          onClose={hideError}
+        />
+      )}
+    </>
   );
 }

@@ -35,7 +35,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [isMetaMaskAvailable, setIsMetaMaskAvailable] = useState(false);
-  const [walletMode, setWalletMode] = useState<WalletMode>("local");
+  
+  // Load wallet mode from localStorage, default to "local"
+  const [walletMode, setWalletModeState] = useState<WalletMode>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("walletMode");
+      return (saved === "metamask" || saved === "local") ? saved : "local";
+    }
+    return "local";
+  });
+
+  const setWalletMode = (mode: WalletMode) => {
+    setWalletModeState(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("walletMode", mode);
+    }
+  };
 
   const useMetaMask = () => walletMode === "metamask" && isConnected;
 
@@ -44,8 +59,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined" && window.ethereum) {
       setIsMetaMaskAvailable(true);
 
-      // Check if already connected
-      checkConnection();
+      // Only auto-connect if user was previously using MetaMask
+      if (walletMode === "metamask") {
+        checkConnection();
+      }
 
       // Listen for account changes
       window.ethereum.on("accountsChanged", handleAccountsChanged);
@@ -55,7 +72,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         window.ethereum?.removeListener("accountsChanged", handleAccountsChanged);
       };
     }
-  }, []);
+  }, [walletMode]);
 
   const checkConnection = async () => {
     if (window.ethereum) {
@@ -116,7 +133,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setSigner(null);
     setAddress(null);
     setIsConnected(false);
-    setWalletMode("local");
+    // Don't change wallet mode on disconnect - keep user's preference
+    // setWalletMode("local");
   };
 
   return (

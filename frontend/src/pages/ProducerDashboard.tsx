@@ -5,6 +5,8 @@ import { useRole } from "../components/RoleContext";
 import { useWallet } from "../components/WalletContext";
 import { useAuth } from "../components/AuthContext";
 import AddressSelect from "../components/AddressSelect";
+import ErrorModal from "../components/ErrorModal";
+import InlineError from "../components/InlineError";
 
 export default function ProducerDashboard() {
   const [name, setName] = useState("");
@@ -14,7 +16,46 @@ export default function ProducerDashboard() {
   const [pendingQuotations, setPendingQuotations] = useState<any[]>([]);
   const [selectedQuotations, setSelectedQuotations] = useState<Set<string>>(new Set());
   const [batchTotalQty, setBatchTotalQty] = useState("");
+  
+  // Error modal (for transaction errors)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<"error" | "success" | "info">("error");
+
+  // Inline field errors
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    desc?: string;
+    qty?: string;
+    supplier?: string;
+    batchTotalQty?: string;
+  }>({});
+
   const role = useRole();
+
+  const showError = (message: string, type: "error" | "success" | "info" = "error") => {
+    setErrorMessage(message);
+    setErrorType(type);
+  };
+
+  const hideError = () => {
+    setErrorMessage(null);
+  };
+
+  const setFieldError = (field: keyof typeof fieldErrors, message: string) => {
+    setFieldErrors(prev => ({ ...prev, [field]: message }));
+  };
+
+  const clearFieldError = (field: keyof typeof fieldErrors) => {
+    setFieldErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[field];
+      return newErrors;
+    });
+  };
+
+  const clearAllFieldErrors = () => {
+    setFieldErrors({});
+  };
   const { signer: metaMaskSigner, walletMode, useMetaMask } = useWallet();
   const { user, registeredAccounts } = useAuth();
   const includeMetaMask = useMetaMask();
@@ -22,7 +63,7 @@ export default function ProducerDashboard() {
   const getActiveSigner = async () => {
     if (walletMode === "metamask") {
       if (!metaMaskSigner) {
-        alert("Please connect MetaMask to perform this action.");
+        showError("Please connect MetaMask to perform this action.");
         return null;
       }
       
@@ -40,14 +81,14 @@ export default function ProducerDashboard() {
         const isRegisteredInContract = await contract.producers(metaMaskAddress);
         
         if (!isRegisteredInContract) {
-          alert(`This MetaMask address (${metaMaskAddress.slice(0, 6)}...${metaMaskAddress.slice(-4)}) is not registered as a producer in the contract. Please use an owner account to register it first, or use a different MetaMask account that is registered as a producer.\n\nNote: If you just deployed, make sure the contract was deployed with MetaMask addresses registered.`);
+          showError(`This MetaMask address (${metaMaskAddress.slice(0, 6)}...${metaMaskAddress.slice(-4)}) is not registered as a producer in the contract. Please use an owner account to register it first, or use a different MetaMask account that is registered as a producer.\n\nNote: If you just deployed, make sure the contract was deployed with MetaMask addresses registered.`);
           return null;
         }
       } catch (error: any) {
         console.error("Error checking producer registration:", error);
         // If we can't check, at least verify it's in the list
         if (!isInList) {
-          alert(`Unable to verify producer registration. This address may not be registered. Please try refreshing the page or contact an owner to register this address.`);
+          showError(`Unable to verify producer registration. This address may not be registered. Please try refreshing the page or contact an owner to register this address.`);
           return null;
         }
       }
@@ -56,36 +97,80 @@ export default function ProducerDashboard() {
     }
 
     if (!user) {
-      alert("Please login as a local producer first.");
+      showError("Please login as a local producer first.");
       return null;
     }
 
     try {
       return await getLocalSigner(user.address);
     } catch (e: any) {
-      alert("Unable to create local signer: " + (e.message || e));
+      showError("Unable to create local signer: " + (e.message || e));
       return null;
     }
   };
 
   const createProduct = async (refreshProducts: () => void) => {
+    clearFieldError("name");
+    clearFieldError("desc");
+    clearFieldError("qty");
+    
+    let hasError = false;
+    if (!name.trim()) {
+      setFieldError("name", "Product name is required");
+      hasError = true;
+    }
+    if (!desc.trim()) {
+      setFieldError("desc", "Description is required");
+      hasError = true;
+    }
+    if (!qty || Number(qty) <= 0) {
+      setFieldError("qty", "Please enter a valid quantity (greater than 0)");
+      hasError = true;
+    }
+    if (hasError) return;
+
     const signer = await getActiveSigner();
     if (!signer) return;
 
-    const contract = getContract(role, signer, true);
-    const tx = await contract.addProduct(name, desc, Number(qty));
-    await tx.wait();
-    refreshProducts();
+    try {
+      const contract = getContract(role, signer, true);
+      const tx = await contract.addProduct(name, desc, Number(qty));
+      await tx.wait();
+      showError("Product created successfully!", "success");
+      setName("");
+      setDesc("");
+      setQty("");
+      clearAllFieldErrors();
+      refreshProducts();
+    } catch (error: any) {
+      console.error("Error creating product:", error);
+      showError("Error creating product: " + (error.message || error));
+    }
   };
 
   const sendToSupplier = async (refreshProducts: () => void, productId: string) => {
+    clearFieldError("supplier");
+    
+    if (!supplier) {
+      setFieldError("supplier", "Please select a supplier");
+      return;
+    }
+
     const signer = await getActiveSigner();
     if (!signer) return;
 
-    const contract = getContract(role, signer, true);
-    const tx = await contract.sendToSupplier(Number(productId), supplier);
-    await tx.wait();
-    refreshProducts();
+    try {
+      const contract = getContract(role, signer, true);
+      const tx = await contract.sendToSupplier(Number(productId), supplier);
+      await tx.wait();
+      showError("Product sent to supplier successfully!", "success");
+      setSupplier("");
+      clearAllFieldErrors();
+      refreshProducts();
+    } catch (error: any) {
+      console.error("Error sending to supplier:", error);
+      showError("Error sending to supplier: " + (error.message || error));
+    }
   };
 
   const loadPendingQuotations = async () => {
@@ -122,13 +207,15 @@ export default function ProducerDashboard() {
   };
 
   const approveQuotations = async () => {
+    clearFieldError("batchTotalQty");
+    
     if (selectedQuotations.size === 0) {
-      alert("Please select at least one quotation");
+      showError("Please select at least one quotation");
       return;
     }
 
-    if (!batchTotalQty) {
-      alert("Please enter total production quantity");
+    if (!batchTotalQty || Number(batchTotalQty) <= 0) {
+      setFieldError("batchTotalQty", "Please enter a valid total production quantity (greater than 0)");
       return;
     }
 
@@ -147,19 +234,20 @@ export default function ProducerDashboard() {
       }
 
       if (Number(batchTotalQty) < totalRequested) {
-        alert(`Total quantity (${batchTotalQty}) must be >= sum of requested quantities (${totalRequested})`);
+        setFieldError("batchTotalQty", `Total quantity (${batchTotalQty}) must be >= sum of requested quantities (${totalRequested})`);
         return;
       }
 
       const tx = await contract.approveQuotations(quotationIds, Number(batchTotalQty));
       await tx.wait();
-      alert("Quotations approved! Product created.");
+      showError("Quotations approved! Product created.", "success");
       setSelectedQuotations(new Set());
       setBatchTotalQty("");
+      clearAllFieldErrors();
       loadPendingQuotations();
     } catch (error: any) {
       console.error("Error approving quotations:", error);
-      alert("Error approving quotations: " + (error.message || error));
+      showError("Error approving quotations: " + (error.message || error));
     }
   };
 
@@ -173,11 +261,11 @@ export default function ProducerDashboard() {
       const contract = getContract(role, signer, true);
       const tx = await contract.rejectQuotation(Number(quotationId));
       await tx.wait();
-      alert("Quotation rejected");
+      showError("Quotation rejected", "success");
       loadPendingQuotations();
     } catch (error: any) {
       console.error("Error rejecting quotation:", error);
-      alert("Error rejecting quotation: " + (error.message || error));
+      showError("Error rejecting quotation: " + (error.message || error));
     }
   };
 
@@ -186,13 +274,14 @@ export default function ProducerDashboard() {
   }, []);
 
   return (
-    <DashboardLayout
-      title="Producer Dashboard"
-      description="Create products and send them to suppliers."
-    >
-      {({ refreshProducts, selectedProduct }) => (
-        <>
-          {/* PENDING QUOTATIONS */}
+    <>
+      <DashboardLayout
+        title="Producer Dashboard"
+        description="Create products and send them to suppliers."
+      >
+        {({ refreshProducts, selectedProduct }) => (
+          <>
+            {/* PENDING QUOTATIONS */}
           <h2 className="font-semibold text-lg mt-2">Pending Quotations</h2>
           <div className="mb-4">
             <button
@@ -244,16 +333,24 @@ export default function ProducerDashboard() {
                   <p className="text-sm mb-2">
                     {selectedQuotations.size} quotation(s) selected
                   </p>
-                  <input
-                    type="number"
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded mb-2"
-                    placeholder="Total Production Quantity (must be >= sum of requested)"
-                    value={batchTotalQty}
-                    onChange={(e) => setBatchTotalQty(e.target.value)}
-                  />
+                  <div>
+                    <input
+                      type="number"
+                      className={`w-full px-3 py-2 bg-gray-800 border rounded mb-1 ${
+                        fieldErrors.batchTotalQty ? "border-red-500" : "border-gray-700"
+                      }`}
+                      placeholder="Total Production Quantity (must be >= sum of requested)"
+                      value={batchTotalQty}
+                      onChange={(e) => {
+                        setBatchTotalQty(e.target.value);
+                        clearFieldError("batchTotalQty");
+                      }}
+                    />
+                    <InlineError message={fieldErrors.batchTotalQty || ""} />
+                  </div>
                   <button
                     onClick={approveQuotations}
-                    className="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg"
+                    className="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg mt-2"
                   >
                     Approve Selected Quotations
                   </button>
@@ -265,23 +362,50 @@ export default function ProducerDashboard() {
           {/* CREATE PRODUCT */}
           <h2 className="font-semibold text-lg mt-2">Create Product (Manual)</h2>
 
-          <input
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded"
-            placeholder="Name"
-            onChange={(e) => setName(e.target.value)}
-          />
+          <div>
+            <input
+              className={`w-full px-3 py-2 bg-gray-800 border rounded ${
+                fieldErrors.name ? "border-red-500" : "border-gray-700"
+              }`}
+              placeholder="Name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                clearFieldError("name");
+              }}
+            />
+            <InlineError message={fieldErrors.name || ""} />
+          </div>
 
-          <input
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded"
-            placeholder="Description"
-            onChange={(e) => setDesc(e.target.value)}
-          />
+          <div>
+            <input
+              className={`w-full px-3 py-2 bg-gray-800 border rounded ${
+                fieldErrors.desc ? "border-red-500" : "border-gray-700"
+              }`}
+              placeholder="Description"
+              value={desc}
+              onChange={(e) => {
+                setDesc(e.target.value);
+                clearFieldError("desc");
+              }}
+            />
+            <InlineError message={fieldErrors.desc || ""} />
+          </div>
 
-          <input
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded"
-            placeholder="Quantity"
-            onChange={(e) => setQty(e.target.value)}
-          />
+          <div>
+            <input
+              className={`w-full px-3 py-2 bg-gray-800 border rounded ${
+                fieldErrors.qty ? "border-red-500" : "border-gray-700"
+              }`}
+              placeholder="Quantity"
+              value={qty}
+              onChange={(e) => {
+                setQty(e.target.value);
+                clearFieldError("qty");
+              }}
+            />
+            <InlineError message={fieldErrors.qty || ""} />
+          </div>
 
           <button
             onClick={() => createProduct(refreshProducts)}
@@ -303,10 +427,14 @@ export default function ProducerDashboard() {
           <AddressSelect
             addresses={getAddressesForRole("suppliers", includeMetaMask)}
             value={supplier}
-            onChange={setSupplier}
+            onChange={(value) => {
+              setSupplier(value);
+              clearFieldError("supplier");
+            }}
             placeholder="Select Supplier Address"
             label="Supplier Address"
             role="suppliers"
+            error={fieldErrors.supplier}
           />
 
           <button
@@ -316,8 +444,16 @@ export default function ProducerDashboard() {
           >
             Send to Supplier
           </button>
-        </>
+          </>
+        )}
+      </DashboardLayout>
+      {errorMessage && (
+        <ErrorModal
+          message={errorMessage}
+          type={errorType}
+          onClose={hideError}
+        />
       )}
-    </DashboardLayout>
+    </>
   );
 }

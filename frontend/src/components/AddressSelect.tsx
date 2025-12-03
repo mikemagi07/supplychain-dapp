@@ -10,6 +10,7 @@ interface AddressSelectProps {
   label?: string;
   allowCustom?: boolean;
   role?: string; // Optional role to help identify addresses
+  error?: string; // Optional error message
 }
 
 export default function AddressSelect({
@@ -20,6 +21,7 @@ export default function AddressSelect({
   label,
   allowCustom = true,
   role,
+  error,
 }: AddressSelectProps) {
   const [isCustom, setIsCustom] = useState(false);
   const [customAddress, setCustomAddress] = useState("");
@@ -131,7 +133,9 @@ export default function AddressSelect({
       {!isCustom ? (
         <div className="flex gap-2">
           <select
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white"
+            className={`w-full px-3 py-2 bg-gray-800 border rounded text-white ${
+              error ? "border-red-500" : "border-gray-700"
+            }`}
             value={value && addresses.includes(value) ? value : ""}
             onChange={handleSelectChange}
           >
@@ -154,7 +158,9 @@ export default function AddressSelect({
           <div className="flex gap-2">
             <input
               type="text"
-              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white"
+              className={`flex-1 px-3 py-2 bg-gray-800 border rounded text-white ${
+                error ? "border-red-500" : "border-gray-700"
+              }`}
               placeholder="0x..."
               value={customAddress}
               onChange={handleCustomInputChange}
@@ -169,10 +175,13 @@ export default function AddressSelect({
         </div>
       )}
       
-      {value && (
+      {value && !error && (
         <p className="text-xs text-gray-400">
           Selected: <span className="text-cyan-300 font-mono">{value}</span>
         </p>
+      )}
+      {error && (
+        <p className="text-red-400 text-xs mt-1">{error}</p>
       )}
     </div>
   );

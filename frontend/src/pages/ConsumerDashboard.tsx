@@ -5,6 +5,8 @@ import { useWallet } from "../components/WalletContext";
 import { useAuth } from "../components/AuthContext";
 import { useRole } from "../components/RoleContext";
 import { getLocalSigner } from "../blockchain/contract";
+import ErrorModal from "../components/ErrorModal";
+import InlineError from "../components/InlineError";
 
 type AvailableProduct = {
   productId: string;
@@ -45,35 +47,77 @@ export default function ConsumerDashboard() {
   const [productId, setProductId] = useState("");
   const [details, setDetails] = useState<any>(null);
 
+  // Error modal (for transaction errors)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<"error" | "success" | "info">("error");
+
+  // Inline field errors
+  const [fieldErrors, setFieldErrors] = useState<{
+    searchName?: string;
+    purchaseProductId?: string;
+    purchaseQuantity?: string;
+    quotationName?: string;
+    quotationDesc?: string;
+    quotationQty?: string;
+    productId?: string;
+  }>({});
+
   const { signer: metaMaskSigner, walletMode } = useWallet();
   const { user } = useAuth();
   const role = useRole();
 
+  const showError = (message: string, type: "error" | "success" | "info" = "error") => {
+    setErrorMessage(message);
+    setErrorType(type);
+  };
+
+  const hideError = () => {
+    setErrorMessage(null);
+  };
+
+  const setFieldError = (field: keyof typeof fieldErrors, message: string) => {
+    setFieldErrors(prev => ({ ...prev, [field]: message }));
+  };
+
+  const clearFieldError = (field: keyof typeof fieldErrors) => {
+    setFieldErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[field];
+      return newErrors;
+    });
+  };
+
+  const clearAllFieldErrors = () => {
+    setFieldErrors({});
+  };
+
   const getActiveSigner = async () => {
     if (walletMode === "metamask") {
       if (!metaMaskSigner) {
-        alert("Please connect MetaMask to perform this action.");
+        showError("Please connect MetaMask to perform this action.");
         return null;
       }
       return metaMaskSigner;
     }
 
     if (!user) {
-      alert("Please login first.");
+      showError("Please login first.");
       return null;
     }
 
     try {
       return await getLocalSigner(user.address);
     } catch (e: any) {
-      alert("Unable to create local signer: " + (e.message || e));
+      showError("Unable to create local signer: " + (e.message || e));
       return null;
     }
   };
 
   const searchAvailableProducts = async () => {
+    clearFieldError("searchName");
+    
     if (!searchName.trim()) {
-      alert("Please enter a product name to search");
+      setFieldError("searchName", "Please enter a product name to search");
       return;
     }
 
@@ -91,15 +135,24 @@ export default function ConsumerDashboard() {
       setAvailableProducts(products);
     } catch (error: any) {
       console.error("Error searching products:", error);
-      alert("Error searching products: " + (error.message || error));
+      showError("Error searching products: " + (error.message || error));
     }
   };
 
   const purchaseFromSurplus = async () => {
-    if (!purchaseProductId || !purchaseQuantity) {
-      alert("Please select a product and enter quantity");
-      return;
+    clearFieldError("purchaseProductId");
+    clearFieldError("purchaseQuantity");
+    
+    let hasError = false;
+    if (!purchaseProductId) {
+      setFieldError("purchaseProductId", "Please select a product");
+      hasError = true;
     }
+    if (!purchaseQuantity || Number(purchaseQuantity) <= 0) {
+      setFieldError("purchaseQuantity", "Please enter a valid quantity (greater than 0)");
+      hasError = true;
+    }
+    if (hasError) return;
 
     const signer = await getActiveSigner();
     if (!signer) return;
@@ -108,21 +161,36 @@ export default function ConsumerDashboard() {
       const contract = getContract(role, signer, true);
       const tx = await contract.purchaseFromSurplus(Number(purchaseProductId), Number(purchaseQuantity));
       await tx.wait();
-      alert("Purchase successful!");
+      showError("Purchase successful!", "success");
       setPurchaseProductId("");
       setPurchaseQuantity("");
+      clearAllFieldErrors();
       searchAvailableProducts(); // Refresh
     } catch (error: any) {
       console.error("Error purchasing:", error);
-      alert("Error purchasing: " + (error.message || error));
+      showError("Error purchasing: " + (error.message || error));
     }
   };
 
   const createQuotation = async () => {
-    if (!quotationName || !quotationDesc || !quotationQty) {
-      alert("Please fill all fields");
-      return;
+    clearFieldError("quotationName");
+    clearFieldError("quotationDesc");
+    clearFieldError("quotationQty");
+    
+    let hasError = false;
+    if (!quotationName.trim()) {
+      setFieldError("quotationName", "Product name is required");
+      hasError = true;
     }
+    if (!quotationDesc.trim()) {
+      setFieldError("quotationDesc", "Description is required");
+      hasError = true;
+    }
+    if (!quotationQty || Number(quotationQty) <= 0) {
+      setFieldError("quotationQty", "Please enter a valid quantity (greater than 0)");
+      hasError = true;
+    }
+    if (hasError) return;
 
     const signer = await getActiveSigner();
     if (!signer) return;
@@ -131,14 +199,15 @@ export default function ConsumerDashboard() {
       const contract = getContract(role, signer, true);
       const tx = await contract.createQuotation(quotationName, quotationDesc, Number(quotationQty));
       await tx.wait();
-      alert("Quotation created successfully!");
+      showError("Quotation created successfully!", "success");
       setQuotationName("");
       setQuotationDesc("");
       setQuotationQty("");
+      clearAllFieldErrors();
       loadMyQuotations();
     } catch (error: any) {
       console.error("Error creating quotation:", error);
-      alert("Error creating quotation: " + (error.message || error));
+      showError("Error creating quotation: " + (error.message || error));
     }
   };
 
@@ -170,10 +239,34 @@ export default function ConsumerDashboard() {
     }
   };
 
-  const load = async () => {
-    const contract = getReadOnlyContract();
-    const res = await contract.getProduct(Number(productId));
-    setDetails(res);
+  const load = async (pid?: string) => {
+    const idToUse = pid || productId;
+    clearFieldError("productId");
+    
+    if (!idToUse) {
+      setFieldError("productId", "Please select or enter a product ID");
+      return;
+    }
+    
+    if (isNaN(Number(idToUse)) || Number(idToUse) <= 0) {
+      setFieldError("productId", "Please enter a valid product ID (positive number)");
+      return;
+    }
+    
+    try {
+      const contract = getReadOnlyContract();
+      const res = await contract.getProduct(Number(idToUse));
+      setDetails(res);
+      clearFieldError("productId");
+    } catch (error: any) {
+      console.error("Error loading product:", error);
+      // Check if it's a validation error or transaction error
+      if (error.message?.includes("does not exist") || error.message?.includes("revert")) {
+        setFieldError("productId", "Product not found. Please check the product ID.");
+      } else {
+        showError("Error loading product: " + (error.message || error));
+      }
+    }
   };
 
   const loadMyPurchases = async () => {
@@ -219,13 +312,16 @@ export default function ConsumerDashboard() {
       const contract = getContract(role, signer, true);
       const tx = await contract.acknowledgePurchase(Number(productId));
       await tx.wait();
-      alert("Purchase acknowledged!");
+      showError("Purchase acknowledged!", "success");
       loadMyPurchases();
     } catch (error: any) {
       console.error("Error acknowledging purchase:", error);
-      alert("Error acknowledging purchase: " + (error.message || error));
+      showError("Error acknowledging purchase: " + (error.message || error));
     }
   };
+
+  // Track selectedProduct from DashboardLayout
+  const [selectedProductFromLayout, setSelectedProductFromLayout] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab === "quotation") {
@@ -234,6 +330,13 @@ export default function ConsumerDashboard() {
       loadMyPurchases();
     }
   }, [activeTab]);
+
+  // Sync selectedProduct with local productId state
+  useEffect(() => {
+    if (selectedProductFromLayout) {
+      setProductId(selectedProductFromLayout);
+    }
+  }, [selectedProductFromLayout]);
 
   const statusLabels: Record<number, string> = {
     0: "Pending",
@@ -250,11 +353,22 @@ export default function ConsumerDashboard() {
   };
 
   return (
-    <DashboardLayout
-      title="Consumer Dashboard"
-      description="Browse available products, create quotations, or verify product authenticity."
-    >
-      <div className="space-y-4">
+    <>
+      <DashboardLayout
+        title="Consumer Dashboard"
+        description="Browse available products, create quotations, or verify product authenticity."
+      >
+        {({ selectedProduct }) => {
+          // Update selectedProduct state when it changes from layout
+          if (selectedProduct !== selectedProductFromLayout) {
+            setSelectedProductFromLayout(selectedProduct);
+          }
+
+          // Use selectedProduct if available, otherwise use local productId
+          const currentProductId = selectedProduct || productId;
+
+          return (
+        <div className="space-y-4">
         {/* Tabs */}
         <div className="flex gap-2 border-b border-gray-700">
           <button
@@ -305,12 +419,20 @@ export default function ConsumerDashboard() {
             <h2 className="font-semibold text-lg">Search Available Products</h2>
             
             <div className="flex gap-2">
-              <input
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded"
-                placeholder="Product name"
-                value={searchName}
-                onChange={(e) => setSearchName(e.target.value)}
-              />
+              <div className="flex-1">
+                <input
+                  className={`w-full px-3 py-2 bg-gray-800 border rounded ${
+                    fieldErrors.searchName ? "border-red-500" : "border-gray-700"
+                  }`}
+                  placeholder="Product name"
+                  value={searchName}
+                  onChange={(e) => {
+                    setSearchName(e.target.value);
+                    clearFieldError("searchName");
+                  }}
+                />
+                <InlineError message={fieldErrors.searchName || ""} />
+              </div>
               <button
                 onClick={searchAvailableProducts}
                 className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
@@ -331,17 +453,23 @@ export default function ConsumerDashboard() {
                       Product ID: {product.productId} | Available: {product.availableQuantity} units
                     </p>
                     <div className="mt-2 flex gap-2">
-                      <input
-                        type="number"
-                        className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm"
-                        placeholder="Quantity"
-                        value={purchaseProductId === product.productId ? purchaseQuantity : ""}
-                        onChange={(e) => {
-                          setPurchaseProductId(product.productId);
-                          setPurchaseQuantity(e.target.value);
-                        }}
-                        max={product.availableQuantity}
-                      />
+                      <div className="flex-1">
+                        <input
+                          type="number"
+                          className={`w-full px-2 py-1 bg-gray-700 border rounded text-sm ${
+                            fieldErrors.purchaseQuantity ? "border-red-500" : "border-gray-600"
+                          }`}
+                          placeholder="Quantity"
+                          value={purchaseProductId === product.productId ? purchaseQuantity : ""}
+                          onChange={(e) => {
+                            setPurchaseProductId(product.productId);
+                            setPurchaseQuantity(e.target.value);
+                            clearFieldError("purchaseQuantity");
+                          }}
+                          max={product.availableQuantity}
+                        />
+                        <InlineError message={fieldErrors.purchaseQuantity || ""} />
+                      </div>
                       <button
                         onClick={purchaseFromSurplus}
                         disabled={purchaseProductId !== product.productId || !purchaseQuantity}
@@ -361,27 +489,51 @@ export default function ConsumerDashboard() {
                 Can't find what you need? Request a product and producers will fulfill it.
               </p>
 
-              <input
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded mb-2"
-                placeholder="Product Name"
-                value={quotationName}
-                onChange={(e) => setQuotationName(e.target.value)}
-              />
+              <div>
+                <input
+                  className={`w-full px-3 py-2 bg-gray-800 border rounded mb-1 ${
+                    fieldErrors.quotationName ? "border-red-500" : "border-gray-700"
+                  }`}
+                  placeholder="Product Name"
+                  value={quotationName}
+                  onChange={(e) => {
+                    setQuotationName(e.target.value);
+                    clearFieldError("quotationName");
+                  }}
+                />
+                <InlineError message={fieldErrors.quotationName || ""} />
+              </div>
 
-              <input
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded mb-2"
-                placeholder="Description"
-                value={quotationDesc}
-                onChange={(e) => setQuotationDesc(e.target.value)}
-              />
+              <div>
+                <input
+                  className={`w-full px-3 py-2 bg-gray-800 border rounded mb-1 ${
+                    fieldErrors.quotationDesc ? "border-red-500" : "border-gray-700"
+                  }`}
+                  placeholder="Description"
+                  value={quotationDesc}
+                  onChange={(e) => {
+                    setQuotationDesc(e.target.value);
+                    clearFieldError("quotationDesc");
+                  }}
+                />
+                <InlineError message={fieldErrors.quotationDesc || ""} />
+              </div>
 
-              <input
-                type="number"
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded mb-2"
-                placeholder="Requested Quantity"
-                value={quotationQty}
-                onChange={(e) => setQuotationQty(e.target.value)}
-              />
+              <div>
+                <input
+                  type="number"
+                  className={`w-full px-3 py-2 bg-gray-800 border rounded mb-1 ${
+                    fieldErrors.quotationQty ? "border-red-500" : "border-gray-700"
+                  }`}
+                  placeholder="Requested Quantity"
+                  value={quotationQty}
+                  onChange={(e) => {
+                    setQuotationQty(e.target.value);
+                    clearFieldError("quotationQty");
+                  }}
+                />
+                <InlineError message={fieldErrors.quotationQty || ""} />
+              </div>
 
               <button
                 onClick={createQuotation}
@@ -444,15 +596,23 @@ export default function ConsumerDashboard() {
         {activeTab === "verify" && (
           <div className="space-y-4">
             <h2 className="font-semibold text-lg">Verify Product</h2>
-            <input
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded"
-              placeholder="Product ID"
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-            />
+            <div>
+              <input
+                className={`w-full px-3 py-2 bg-gray-800 border rounded ${
+                  fieldErrors.productId ? "border-red-500" : "border-gray-700"
+                }`}
+                placeholder="Product ID"
+                value={currentProductId}
+                onChange={(e) => {
+                  setProductId(e.target.value);
+                  clearFieldError("productId");
+                }}
+              />
+              <InlineError message={fieldErrors.productId || ""} />
+            </div>
 
             <button
-              onClick={load}
+              onClick={() => load(currentProductId)}
               className="w-full bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg"
             >
               Verify Product
@@ -525,6 +685,16 @@ export default function ConsumerDashboard() {
           </div>
         )}
       </div>
-    </DashboardLayout>
+          );
+        }}
+      </DashboardLayout>
+      {errorMessage && (
+        <ErrorModal
+          message={errorMessage}
+          type={errorType}
+          onClose={hideError}
+        />
+      )}
+    </>
   );
 }
