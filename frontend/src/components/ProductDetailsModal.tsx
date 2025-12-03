@@ -35,6 +35,11 @@ export default function ProductDetailsModal({
     // Use getProductExtended to get accurate availableQuantity
     const p = await c.getProductExtended(Number(productId));
 
+    const formatTimestamp = (timestamp: bigint) => {
+      if (timestamp === BigInt(0)) return "Not yet";
+      return new Date(Number(timestamp) * 1000).toLocaleString();
+    };
+
     setProduct({
       id: p[0].toString(),
       name: p[1],
@@ -48,6 +53,12 @@ export default function ProductDetailsModal({
       consumer: p[9],
       status: Number(p[10]),
       shippingInfo: p[11],
+      sentToSupplierAt: formatTimestamp(p[14]),
+      receivedBySupplierAt: formatTimestamp(p[15]),
+      sentToRetailerAt: formatTimestamp(p[16]),
+      receivedByRetailerAt: formatTimestamp(p[17]),
+      addedToStoreAt: formatTimestamp(p[18]),
+      soldToConsumerAt: formatTimestamp(p[19]),
     });
   };
 
@@ -131,6 +142,40 @@ export default function ProductDetailsModal({
                   Note: This shows the last consumer. Product may have multiple partial sales.
                 </p>
               )}
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-800 mb-3">Product Timeline</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between items-start">
+                <b className="text-gray-700">Created:</b>
+                <span className="text-gray-900 text-right">{product.createdAt}</span>
+              </div>
+              <div className="flex justify-between items-start">
+                <b className="text-gray-700">Sent to Supplier:</b>
+                <span className="text-gray-900 text-right">{product.sentToSupplierAt}</span>
+              </div>
+              <div className="flex justify-between items-start">
+                <b className="text-gray-700">Received by Supplier:</b>
+                <span className="text-gray-900 text-right">{product.receivedBySupplierAt}</span>
+              </div>
+              <div className="flex justify-between items-start">
+                <b className="text-gray-700">Sent to Retailer:</b>
+                <span className="text-gray-900 text-right">{product.sentToRetailerAt}</span>
+              </div>
+              <div className="flex justify-between items-start">
+                <b className="text-gray-700">Received by Retailer:</b>
+                <span className="text-gray-900 text-right">{product.receivedByRetailerAt}</span>
+              </div>
+              <div className="flex justify-between items-start">
+                <b className="text-gray-700">Added to Store:</b>
+                <span className="text-gray-900 text-right">{product.addedToStoreAt}</span>
+              </div>
+              <div className="flex justify-between items-start">
+                <b className="text-gray-700">Sold to Consumer:</b>
+                <span className="text-gray-900 text-right">{product.soldToConsumerAt}</span>
+              </div>
             </div>
           </div>
         </div>

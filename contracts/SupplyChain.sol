@@ -49,6 +49,13 @@ contract SupplyChain {
         string shippingInfo;
         uint256[] quotationIds;     // Quotations this product fulfills
         bool isFromQuotation;        // True if created from quotation approval
+        // Timestamps for each step
+        uint256 sentToSupplierAt;
+        uint256 receivedBySupplierAt;
+        uint256 sentToRetailerAt;
+        uint256 receivedByRetailerAt;
+        uint256 addedToStoreAt;
+        uint256 soldToConsumerAt;
     }
 
     // Mapping to store products
@@ -174,7 +181,13 @@ contract SupplyChain {
             status: ProductStatus.Created,
             shippingInfo: "",
             quotationIds: new uint256[](0),
-            isFromQuotation: false
+            isFromQuotation: false,
+            sentToSupplierAt: 0,
+            receivedBySupplierAt: 0,
+            sentToRetailerAt: 0,
+            receivedByRetailerAt: 0,
+            addedToStoreAt: 0,
+            soldToConsumerAt: 0
         });
 
         emit ProductCreated(productCount, _name, msg.sender);
@@ -189,6 +202,7 @@ contract SupplyChain {
 
         products[_productId].supplier = _supplier;
         products[_productId].status = ProductStatus.SentToSupplier;
+        products[_productId].sentToSupplierAt = block.timestamp;
 
         emit ProductSentToSupplier(_productId, _supplier);
     }
@@ -200,6 +214,7 @@ contract SupplyChain {
         require(products[_productId].status == ProductStatus.SentToSupplier, "Product must be sent to supplier first");
 
         products[_productId].status = ProductStatus.ReceivedBySupplier;
+        products[_productId].receivedBySupplierAt = block.timestamp;
 
         emit ProductReceivedBySupplier(_productId);
     }
@@ -237,6 +252,7 @@ contract SupplyChain {
         require(products[_productId].status == ProductStatus.SentToRetailer, "Product must be sent to retailer first");
 
         products[_productId].status = ProductStatus.ReceivedByRetailer;
+        products[_productId].receivedByRetailerAt = block.timestamp;
 
         emit ProductReceivedByRetailer(_productId);
     }
@@ -247,6 +263,7 @@ contract SupplyChain {
         require(products[_productId].status == ProductStatus.ReceivedByRetailer, "Product must be received by retailer first");
 
         products[_productId].status = ProductStatus.AvailableForSale;
+        products[_productId].addedToStoreAt = block.timestamp;
 
         emit ProductAddedToStore(_productId);
     }
@@ -272,6 +289,7 @@ contract SupplyChain {
         // If all quantity is sold, mark as sold
         if (products[_productId].availableQuantity == 0) {
             products[_productId].status = ProductStatus.SoldToConsumer;
+            products[_productId].soldToConsumerAt = block.timestamp;
         }
 
         emit ProductSoldToConsumer(_productId, _consumer);
@@ -287,6 +305,7 @@ contract SupplyChain {
         products[_productId].availableQuantity = 0;
         products[_productId].consumer = _consumer;
         products[_productId].status = ProductStatus.SoldToConsumer;
+        products[_productId].soldToConsumerAt = block.timestamp;
         
         salesRecords[_productId][_consumer] = quantity;
         consumerAcknowledgments[_productId][_consumer] = false;
@@ -416,7 +435,13 @@ contract SupplyChain {
             status: ProductStatus.Created,
             shippingInfo: "",
             quotationIds: _quotationIds,
-            isFromQuotation: true
+            isFromQuotation: true,
+            sentToSupplierAt: 0,
+            receivedBySupplierAt: 0,
+            sentToRetailerAt: 0,
+            receivedByRetailerAt: 0,
+            addedToStoreAt: 0,
+            soldToConsumerAt: 0
         });
 
         // Update quotation statuses
@@ -505,6 +530,7 @@ contract SupplyChain {
         // If all quantity is sold, mark as sold
         if (products[_productId].availableQuantity == 0) {
             products[_productId].status = ProductStatus.SoldToConsumer;
+            products[_productId].soldToConsumerAt = block.timestamp;
         }
 
         emit ProductSoldToConsumer(_productId, msg.sender);
@@ -619,7 +645,13 @@ contract SupplyChain {
         ProductStatus status,
         string memory shippingInfo,
         uint256[] memory quotationIds,
-        bool isFromQuotation
+        bool isFromQuotation,
+        uint256 sentToSupplierAt,
+        uint256 receivedBySupplierAt,
+        uint256 sentToRetailerAt,
+        uint256 receivedByRetailerAt,
+        uint256 addedToStoreAt,
+        uint256 soldToConsumerAt
     ) {
         Product storage product = products[_productId];
         id = product.id;
@@ -636,6 +668,12 @@ contract SupplyChain {
         shippingInfo = product.shippingInfo;
         quotationIds = product.quotationIds;
         isFromQuotation = product.isFromQuotation;
+        sentToSupplierAt = product.sentToSupplierAt;
+        receivedBySupplierAt = product.receivedBySupplierAt;
+        sentToRetailerAt = product.sentToRetailerAt;
+        receivedByRetailerAt = product.receivedByRetailerAt;
+        addedToStoreAt = product.addedToStoreAt;
+        soldToConsumerAt = product.soldToConsumerAt;
     }
 
     // Consumer acknowledgment

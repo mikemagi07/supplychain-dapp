@@ -28,7 +28,7 @@ type Quotation = {
 };
 
 export default function ConsumerDashboard() {
-  const [activeTab, setActiveTab] = useState<"browse" | "quotation" | "verify" | "purchases">("browse");
+  const [activeTab, setActiveTab] = useState<"browse" | "quotation" | "purchases">("browse");
   
   // Browse products
   const [searchName, setSearchName] = useState("");
@@ -52,10 +52,6 @@ export default function ConsumerDashboard() {
   // My purchases
   const [myPurchases, setMyPurchases] = useState<any[]>([]);
 
-  // Verify product
-  const [productId, setProductId] = useState("");
-  const [details, setDetails] = useState<any>(null);
-
   // Error modal (for transaction errors)
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<"error" | "success" | "info">("error");
@@ -68,7 +64,6 @@ export default function ConsumerDashboard() {
     quotationName?: string;
     quotationDesc?: string;
     quotationQty?: string;
-    productId?: string;
   }>({});
 
   const { signer: metaMaskSigner, walletMode } = useWallet();
@@ -361,35 +356,6 @@ export default function ConsumerDashboard() {
     }
   };
 
-  const load = async (pid?: string) => {
-    const idToUse = pid || productId;
-    clearFieldError("productId");
-    
-    if (!idToUse) {
-      setFieldError("productId", "Please select or enter a product ID");
-      return;
-    }
-    
-    if (isNaN(Number(idToUse)) || Number(idToUse) <= 0) {
-      setFieldError("productId", "Please enter a valid product ID (positive number)");
-      return;
-    }
-    
-    try {
-      const contract = getReadOnlyContract();
-      const res = await contract.getProduct(Number(idToUse));
-      setDetails(res);
-      clearFieldError("productId");
-    } catch (error: any) {
-      console.error("Error loading product:", error);
-      // Check if it's a validation error or transaction error
-      if (error.message?.includes("does not exist") || error.message?.includes("revert")) {
-        setFieldError("productId", "Product not found. Please check the product ID.");
-      } else {
-        showError("Error loading product: " + (error.message || error));
-      }
-    }
-  };
 
   const loadMyPurchases = async () => {
     try {
@@ -461,9 +427,6 @@ export default function ConsumerDashboard() {
     }
   };
 
-  // Track selectedProduct from DashboardLayout
-  const [selectedProductFromLayout, setSelectedProductFromLayout] = useState<string | null>(null);
-
   useEffect(() => {
     if (activeTab === "quotation") {
       loadMyQuotations();
@@ -486,12 +449,6 @@ export default function ConsumerDashboard() {
     }
   });
 
-  // Sync selectedProduct with local productId state
-  useEffect(() => {
-    if (selectedProductFromLayout) {
-      setProductId(selectedProductFromLayout);
-    }
-  }, [selectedProductFromLayout]);
 
   const statusLabels: Record<number, string> = {
     0: "Pending",
@@ -511,17 +468,9 @@ export default function ConsumerDashboard() {
     <>
       <DashboardLayout
         title="Consumer Dashboard"
-        description="Browse available products, create quotations, or verify product authenticity."
+        description="Browse available products, create quotations, and manage your purchases."
       >
         {({ selectedProduct }) => {
-          // Update selectedProduct state when it changes from layout
-          if (selectedProduct !== selectedProductFromLayout) {
-            setSelectedProductFromLayout(selectedProduct);
-          }
-
-          // Use selectedProduct if available, otherwise use local productId
-          const currentProductId = selectedProduct || productId;
-
           return (
         <div className="space-y-4">
         {/* Tabs */}
@@ -545,16 +494,6 @@ export default function ConsumerDashboard() {
             }`}
           >
             My Quotations
-          </button>
-          <button
-            onClick={() => setActiveTab("verify")}
-            className={`px-4 py-2 font-medium ${
-              activeTab === "verify"
-                ? "border-b-2 border-blue-500 text-blue-400"
-                : "text-gray-400 hover:text-gray-300"
-            }`}
-          >
-            Verify Product
           </button>
           <button
             onClick={() => setActiveTab("purchases")}
@@ -829,44 +768,6 @@ export default function ConsumerDashboard() {
                     </div>
                   </div>
                 ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Verify Product Tab */}
-        {activeTab === "verify" && (
-          <div className="space-y-4">
-            <h2 className="font-semibold text-lg">Verify Product</h2>
-            <div>
-              <input
-                className={`w-full px-3 py-2 bg-gray-800 border rounded ${
-                  fieldErrors.productId ? "border-red-500" : "border-gray-700"
-                }`}
-                placeholder="Product ID"
-                value={currentProductId}
-                onChange={(e) => {
-                  setProductId(e.target.value);
-                  clearFieldError("productId");
-                }}
-              />
-              <InlineError message={fieldErrors.productId || ""} />
-            </div>
-
-            <button
-              onClick={() => load(currentProductId)}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg"
-            >
-              Verify Product
-            </button>
-
-            {details && (
-              <div className="bg-gray-800 p-4 rounded border border-gray-700">
-                <p className="text-sm text-gray-300">
-                  <strong>Product Name:</strong> {details[1]} <br />
-                  <strong>Status:</strong> {details[9].toString()} <br />
-                  <strong>Quantity:</strong> {details[3].toString()}
-                </p>
               </div>
             )}
           </div>
