@@ -21,13 +21,25 @@ export default function Navbar() {
           SupplyChain DApp
         </Link>
 
-        <div className="hidden md:flex gap-6">
-          <Link to="/owner" className="hover:text-cyan-300">Owner</Link>
-          <Link to="/producer" className="hover:text-cyan-300">Producer</Link>
-          <Link to="/supplier" className="hover:text-cyan-300">Supplier</Link>
-          <Link to="/retailer" className="hover:text-cyan-300">Retailer</Link>
-          <Link to="/consumer" className="hover:text-cyan-300">Consumer</Link>
-        </div>
+        {user && (
+          <div className="hidden md:flex gap-6">
+            {user.role === "owner" && (
+              <Link to="/owner" className="hover:text-cyan-300">Owner</Link>
+            )}
+            {user.role === "producer" && (
+              <Link to="/producer" className="hover:text-cyan-300">Producer</Link>
+            )}
+            {user.role === "supplier" && (
+              <Link to="/supplier" className="hover:text-cyan-300">Supplier</Link>
+            )}
+            {user.role === "retailer" && (
+              <Link to="/retailer" className="hover:text-cyan-300">Retailer</Link>
+            )}
+            {user.role === "consumer" && (
+              <Link to="/consumer" className="hover:text-cyan-300">Consumer</Link>
+            )}
+          </div>
+        )}
       </div>
 
       {/* RIGHT SIDE: CONNECT WALLET */}

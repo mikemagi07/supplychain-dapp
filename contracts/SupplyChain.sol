@@ -63,6 +63,7 @@ contract SupplyChain {
     mapping(address => bool) public producers;
     mapping(address => bool) public suppliers;
     mapping(address => bool) public retailers;
+    mapping(address => bool) public consumers;
 
     // Quotation mappings
     mapping(uint256 => Quotation) public quotations;
@@ -99,6 +100,7 @@ contract SupplyChain {
     event ProducerRegistered(address indexed producer);
     event SupplierRegistered(address indexed supplier);
     event RetailerRegistered(address indexed retailer);
+    event ConsumerRegistered(address indexed consumer);
 
     modifier onlyOwner() {
         require(owners[msg.sender], "Only owner can perform this action");
@@ -158,6 +160,11 @@ contract SupplyChain {
     function registerRetailer(address _retailer) public onlyOwner {
         retailers[_retailer] = true;
         emit RetailerRegistered(_retailer);
+    }
+
+    function registerConsumer(address _consumer) public onlyOwner {
+        consumers[_consumer] = true;
+        emit ConsumerRegistered(_consumer);
     }
 
     // Producer functions

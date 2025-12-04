@@ -31,6 +31,8 @@ describe("🦊 MetaMask Integration Tests", function () {
     await supplyChain.registerSupplier(supplier2.address);
     await supplyChain.registerRetailer(retailer1.address);
     await supplyChain.registerRetailer(retailer2.address);
+    await supplyChain.registerConsumer(consumer1.address);
+    await supplyChain.registerConsumer(consumer2.address);
   });
 
   describe("Network Configuration", function () {
@@ -158,7 +160,7 @@ describe("🦊 MetaMask Integration Tests", function () {
 
       // Retailer1 sells to consumer1
       await expect(
-        supplyChain.connect(retailer1).sellToConsumer(productId, consumer1.address)
+        supplyChain.connect(retailer1).sellToConsumer(productId, consumer1.address, 50)
       ).to.emit(supplyChain, "ProductSoldToConsumer");
 
       const finalProduct = await supplyChain.getProduct(productId);

@@ -10,6 +10,7 @@ export default function OwnerDashboard() {
   const [producerAddress, setProducerAddress] = useState("");
   const [supplierAddress, setSupplierAddress] = useState("");
   const [retailerAddress, setRetailerAddress] = useState("");
+  const [consumerAddress, setConsumerAddress] = useState("");
   const role = useRole();
   const { signer: metaMaskSigner, walletMode, useMetaMask } = useWallet();
   const { loadRegisteredAccounts, user, registeredAccounts } = useAuth();
@@ -129,6 +130,26 @@ export default function OwnerDashboard() {
     }
   };
 
+  const registerConsumer = async () => {
+    if (!consumerAddress) {
+      alert("Please enter a consumer address");
+      return;
+    }
+    try {
+      const signer = await ensureSigner();
+      if (!signer) return;
+      const contract = getContract(role, signer, true);
+      const tx = await contract.registerConsumer(consumerAddress);
+      await tx.wait();
+      alert("Consumer registered successfully!");
+      setConsumerAddress("");
+      // Refresh registered accounts list
+      await loadRegisteredAccounts();
+    } catch (error: any) {
+      alert("Error registering consumer: " + (error.message || error));
+    }
+  };
+
   const addOwner = async () => {
     if (!newOwnerAddress) {
       alert("Please enter an owner address");
@@ -237,6 +258,26 @@ export default function OwnerDashboard() {
             className="w-full mt-3 bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg"
           >
             Register Retailer
+          </button>
+        </div>
+
+        {/* Register Consumer */}
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <h2 className="font-semibold text-lg mb-3">Register Consumer</h2>
+          <AddressSelect
+            addresses={getAddressesForRole("consumers", includeMetaMask)}
+            value={consumerAddress}
+            onChange={setConsumerAddress}
+            placeholder="Select or enter Consumer Address (0x...)"
+            label="Consumer Address"
+            allowCustom={true}
+            role="consumers"
+          />
+          <button
+            onClick={registerConsumer}
+            className="w-full mt-3 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg"
+          >
+            Register Consumer
           </button>
         </div>
 
