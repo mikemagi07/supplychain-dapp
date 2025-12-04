@@ -79,7 +79,7 @@ To create a DApp that tracks a product's journey from production to consumption 
 **Main Role:** The owner manages the system and registers stakeholders.
 
 **Functionalities:**
-1. **Register Stakeholders** – Register producers, suppliers, and retailers
+1. **Register Stakeholders** – Register producers, suppliers, retailers, and consumers
 2. **Add/Remove Owners** – Manage admin accounts
 3. **System Administration** – Oversee the supply chain system
 
@@ -295,6 +295,7 @@ Retailer Fulfillment → Consumer Purchase
 - ✅ **Event Logging** – Comprehensive event system for tracking
 - ✅ **Multi-Owner Support** – Multiple admin accounts
 - ✅ **Product Timeline Tracking** – Timestamps for each step in the product lifecycle
+- ✅ **Consumer Registration** – Owners can register consumers in the system
 
 ### Advanced Features
 - ✅ **Quotation System** – Consumers request products, producers approve/reject, batch fulfillment
@@ -420,6 +421,7 @@ The test suite includes:
 - **Consumer acknowledgment tests** – Purchase confirmation
 - **Retailer store tests** – Store product management
 - **Surplus inventory tests** – Direct purchase functionality
+- **Consumer registration tests** – Owner can register consumers, access control verification
 
 ---
 

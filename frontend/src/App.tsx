@@ -24,7 +24,7 @@ function AppRoutes() {
             path="/"
             element={
               <Navigate
-                to={`/${user?.role || "producer"}`}
+                to={`/${user?.role || "login"}`}
                 replace
               />
             }

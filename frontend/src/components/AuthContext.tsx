@@ -63,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const producers: string[] = [];
       const suppliers: string[] = [];
       const retailers: string[] = [];
+      const consumers: string[] = [];
       const owners: string[] = [];
 
       // Query past events to discover all registered addresses
@@ -115,6 +116,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         });
 
+        // Query ConsumerRegistered events
+        const consumerFilter = contract.filters.ConsumerRegistered();
+        const consumerEvents = await contract.queryFilter(consumerFilter);
+        consumerEvents.forEach((event) => {
+          if (event instanceof ethers.EventLog) {
+            const addr = event.args[0];
+            if (addr && !consumers.some(a => a.toLowerCase() === addr.toLowerCase())) {
+              consumers.push(addr);
+            }
+          }
+        });
+
         // Handle OwnerRemoved events - remove from owners list
         const ownerRemovedFilter = contract.filters.OwnerRemoved();
         const ownerRemovedEvents = await contract.queryFilter(ownerRemovedFilter);
@@ -142,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...ALL_ADDRESSES.producers,
           ...ALL_ADDRESSES.suppliers,
           ...ALL_ADDRESSES.retailers,
+          ...ALL_ADDRESSES.consumers,
           ...ALL_ADDRESSES.owners,
         ])
       );
@@ -167,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const isProducer = await contract.producers(addr);
           const isSupplier = await contract.suppliers(addr);
           const isRetailer = await contract.retailers(addr);
+          const isConsumer = await contract.consumers(addr);
           const isOwner = await contract.owners(addr);
 
           if (isProducer && !producers.some(a => a.toLowerCase() === addr.toLowerCase())) {
@@ -177,6 +192,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           if (isRetailer && !retailers.some(a => a.toLowerCase() === addr.toLowerCase())) {
             retailers.push(addr);
+          }
+          if (isConsumer && !consumers.some(a => a.toLowerCase() === addr.toLowerCase())) {
+            consumers.push(addr);
           }
           if (isOwner && !owners.some(a => a.toLowerCase() === addr.toLowerCase())) {
             owners.push(addr);
@@ -190,7 +208,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         producers,
         suppliers,
         retailers,
-        consumers: [...ALL_ADDRESSES.consumers, ...(ALL_ADDRESSES.metamaskConsumers || [])], // All consumer addresses are allowed (including MetaMask)
+        consumers: [
+          ...consumers,
+          // Also include addresses from config that might not be registered yet
+          ...ALL_ADDRESSES.consumers.filter(addr => !consumers.some(c => c.toLowerCase() === addr.toLowerCase())),
+          ...(ALL_ADDRESSES.metamaskConsumers || []).filter(addr => !consumers.some(c => c.toLowerCase() === addr.toLowerCase()))
+        ],
         owners,
       });
     } catch (error) {
@@ -260,6 +283,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     };
 
+    const handleConsumerRegistered = (consumer: string) => {
+      setRegisteredAccounts((prev) => {
+        if (!prev.consumers.some(a => a.toLowerCase() === consumer.toLowerCase())) {
+          return { ...prev, consumers: [...prev.consumers, consumer] };
+        }
+        return prev;
+      });
+    };
+
     // Attach event listeners
     try {
       contract.on("OwnerAdded", handleOwnerAdded);
@@ -267,6 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       contract.on("ProducerRegistered", handleProducerRegistered);
       contract.on("SupplierRegistered", handleSupplierRegistered);
       contract.on("RetailerRegistered", handleRetailerRegistered);
+      contract.on("ConsumerRegistered", handleConsumerRegistered);
     } catch (e) {
       console.warn("Could not attach event listeners (events may not exist in contract):", e);
     }
@@ -279,6 +312,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         contract.off("ProducerRegistered", handleProducerRegistered);
         contract.off("SupplierRegistered", handleSupplierRegistered);
         contract.off("RetailerRegistered", handleRetailerRegistered);
+        contract.off("ConsumerRegistered", handleConsumerRegistered);
       } catch (e) {
         // Ignore cleanup errors
       }
