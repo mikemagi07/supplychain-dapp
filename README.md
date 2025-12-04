@@ -5,12 +5,12 @@
 This is a **Blockchain-based Supply Chain Management System** built to demonstrate how blockchain can bring **transparency, security, and traceability** to product movement across a supply chain.
 
 The system involves four main stakeholders:
-- 🧑‍🌾 **Producer** - Creates products and initiates the supply chain
+- 🧑‍🌾 **Producer** - Creates products, manages consumer quotations, and initiates the supply chain
 - 🚚 **Supplier** - Receives and transports products
-- 🏪 **Retailer** - Sells products to consumers
-- 👤 **Consumer** - Purchases and verifies product authenticity
+- 🏪 **Retailer** - Manages inventory, fulfills quotations, and sells products to consumers
+- 👤 **Consumer** - Requests products, purchases from inventory, and tracks purchases
 
-Each participant interacts with the blockchain through a decentralized web application (DApp) built using **React** and **Solidity**, ensuring every transaction is securely recorded on the blockchain.
+Each participant interacts with the blockchain through a decentralized web application (DApp) built using **React** and **Solidity**, ensuring every transaction is securely recorded on the blockchain with complete timestamp tracking.
 
 ---
 
@@ -30,9 +30,11 @@ To create a DApp that tracks a product's journey from production to consumption 
 **Main Role:** The producer creates the product and starts its blockchain record.
 
 **Functionalities:**
-1. **Add Product** – Add new product details (name, description, quantity)
-2. **Send to Supplier** – Transfer product to supplier and update blockchain record
-3. **View Product Status** – Check where the product is currently in the supply chain
+1. **Add Product** – Add new product details (name, description, quantity) with product templates
+2. **Manage Quotations** – View, approve, or reject consumer quotation requests
+3. **Batch Approval** – Approve multiple quotations for the same product with a single production batch
+4. **Send to Supplier** – Transfer product to supplier and update blockchain record
+5. **View Product Status** – Check where the product is currently in the supply chain
 
 ---
 
@@ -52,7 +54,10 @@ To create a DApp that tracks a product's journey from production to consumption 
 **Functionalities:**
 1. **Receive Product** – Mark product as received from supplier
 2. **Add to Store** – List products as available for sale
-3. **Sell to Consumer** – Transfer product ownership to the consumer
+3. **View Store Products** – See all products currently in your store with quantities
+4. **Fulfill Quotations** – Fulfill approved consumer quotations from products
+5. **Manage Surplus Inventory** – View and sell unallocated products
+6. **Sell to Consumer** – Transfer product ownership to the consumer (supports partial quantity sales)
 
 ---
 
@@ -60,9 +65,13 @@ To create a DApp that tracks a product's journey from production to consumption 
 **Main Role:** The consumer buys and verifies the authenticity of the product.
 
 **Functionalities:**
-1. **Check Product Details** – View the product's complete blockchain record
-2. **Buy Product** – Purchase the product from the retailer
-3. **Verify Authenticity** – Confirm ownership and trace product history
+1. **Browse Products** – Search and browse available products with autocomplete suggestions
+2. **Create Quotation Requests** – Request products that aren't available (with product templates)
+3. **View My Quotations** – Track status of quotation requests (Pending, Approved, Rejected, Fulfilled)
+4. **Purchase from Surplus** – Buy directly from available inventory
+5. **View My Purchases** – See all purchased products with quantities
+6. **Acknowledge Purchase** – Confirm receipt of purchased products
+7. **View Product Details** – View complete product timeline and blockchain record
 
 ---
 
@@ -252,20 +261,62 @@ Created → SentToSupplier → ReceivedBySupplier → SentToRetailer →
 ReceivedByRetailer → AvailableForSale → SoldToConsumer
 ```
 
+### Product Lifecycle with Timestamps
+
+Each step in the product lifecycle is timestamped for complete audit trail:
+- **Created** – Product creation timestamp
+- **Sent to Supplier** – When producer sends to supplier
+- **Received by Supplier** – When supplier receives
+- **Sent to Retailer** – When supplier sends to retailer
+- **Received by Retailer** – When retailer receives
+- **Added to Store** – When product becomes available for sale
+- **Sold to Consumer** – When product is fully sold
+
+### Quotation System Flow
+
+```
+Consumer Request → Producer Approval → Product Creation → 
+Retailer Fulfillment → Consumer Purchase
+```
+
+- Consumers can request products via quotations
+- Producers can batch approve multiple quotations
+- Products can fulfill multiple quotations simultaneously
+- Surplus inventory available for direct purchase
+
 ---
 
 ## 🔐 Key Features
 
+### Core Supply Chain Features
 - ✅ **Complete Supply Chain Flow** – Producer → Supplier → Retailer → Consumer
 - ✅ **Role-Based Access Control** – Secure permissions for each stakeholder
 - ✅ **Immutable Records** – All transactions recorded on blockchain
 - ✅ **Event Logging** – Comprehensive event system for tracking
 - ✅ **Multi-Owner Support** – Multiple admin accounts
+- ✅ **Product Timeline Tracking** – Timestamps for each step in the product lifecycle
+
+### Advanced Features
+- ✅ **Quotation System** – Consumers request products, producers approve/reject, batch fulfillment
+- ✅ **Partial Purchases** – Support for partial quantity sales and purchases
+- ✅ **Consumer Acknowledgment** – Consumers can acknowledge receipt of purchased products
+- ✅ **Surplus Inventory Management** – Track and sell unallocated products
+- ✅ **Product Templates** – Quick product creation using pre-defined templates
+- ✅ **Enhanced Search** – Autocomplete, partial matching, and client-side filtering
+- ✅ **Inventory Visibility** – View available quantities, total quantities, and sales records
+
+### User Experience
+- ✅ **Wallet Mode Persistence** – Remembers wallet preference (MetaMask/Local) across sessions
+- ✅ **Smart Error Handling** – Modal pop-ups for transactions, inline validation for forms
+- ✅ **Product Row Click Prefilling** – Click anywhere on product row to prefill input fields
+- ✅ **Real-time Updates** – Auto-refresh on blockchain events
+- ✅ **Responsive Design** – Modern UI with Tailwind CSS
+
+### Technical Features
 - ✅ **MetaMask Integration** – Support for both local and MetaMask wallets
 - ✅ **Type-Safe Development** – TypeScript throughout
-- ✅ **Modern UI** – React with Tailwind CSS and Chakra UI
 - ✅ **Automated Deployment** – One-command setup
-- ✅ **Testing Framework** – Comprehensive test suite
+- ✅ **Comprehensive Testing** – Full test suite including quotation system tests
 
 ---
 
@@ -284,9 +335,14 @@ supplychain-dapp/
 ├── frontend/               # React frontend application
 │   ├── src/
 │   │   ├── components/   # React components
+│   │   │   ├── ProductDetailsModal.tsx  # Product details with timeline
+│   │   │   ├── ProductTemplateSelector.tsx  # Product templates
+│   │   │   ├── ErrorModal.tsx  # Error/success modals
+│   │   │   └── InlineError.tsx  # Inline field validation
 │   │   ├── pages/        # Page components
 │   │   ├── blockchain/   # Contract integration
-│   │   └── ...
+│   │   ├── data/         # Data files (product templates)
+│   │   └── hooks/        # Custom hooks (useSupplyChainEvents)
 │   └── public/
 ├── test/                   # Test files
 ├── artifacts/              # Compiled contract artifacts
@@ -359,6 +415,11 @@ The test suite includes:
 - Role registration tests
 - Supply chain flow tests
 - MetaMask integration tests
+- **Quotation system tests** – Creation, approval, rejection, fulfillment
+- **Partial purchase tests** – Multiple consumers, quantity tracking
+- **Consumer acknowledgment tests** – Purchase confirmation
+- **Retailer store tests** – Store product management
+- **Surplus inventory tests** – Direct purchase functionality
 
 ---
 
@@ -378,10 +439,27 @@ The test suite includes:
    - If using MetaMask, ensure it's connected to Hardhat Local network
 
 4. **Use the Application**
-   - **Producer:** Add products and send to suppliers
-   - **Supplier:** Receive products, update shipping info, send to retailers
-   - **Retailer:** Receive products, add to store, sell to consumers
-   - **Consumer:** View product details and purchase products
+   - **Producer:** 
+     - Create products (manual or using templates)
+     - Manage pending quotations (approve/reject)
+     - Batch approve multiple quotations
+     - Send products to suppliers
+   - **Supplier:** 
+     - Receive products from producers
+     - Update shipping information
+     - Send products to retailers
+   - **Retailer:** 
+     - Receive products from suppliers
+     - Add products to store
+     - View store products and surplus inventory
+     - Fulfill quotations
+     - Sell products to consumers (partial quantities supported)
+   - **Consumer:** 
+     - Browse and search available products
+     - Create quotation requests (using templates)
+     - Purchase from surplus inventory
+     - View purchase history and acknowledge purchases
+     - View complete product timeline
    - **Owner:** Register new stakeholders and manage system
 
 ---
@@ -405,21 +483,41 @@ The test suite includes:
 
 ---
 
+## 🆕 Recent Updates
+
+### v2.0 Features (Latest)
+- ✨ **Quotation System** – Consumer requests, producer approvals, batch fulfillment
+- ✨ **Partial Purchases** – Support for selling/buying partial quantities
+- ✨ **Product Templates** – Quick product creation with pre-defined templates
+- ✨ **Enhanced Search** – Autocomplete, partial matching, and smart filtering
+- ✨ **Timeline Tracking** – Timestamps for every step in product lifecycle
+- ✨ **Consumer Acknowledgment** – Purchase confirmation system
+- ✨ **Retailer Store View** – View all products in retailer's store
+- ✨ **Error Handling** – Modal pop-ups and inline field validation
+- ✨ **Wallet Persistence** – Remembers wallet mode across page refreshes
+- ✨ **Product Row Prefilling** – Click product row to auto-fill input fields
+
+### Inventory Management
+- Track `totalQuantity` and `availableQuantity` separately
+- Support for multiple partial sales to different consumers
+- Sales records per consumer per product
+- Surplus inventory tracking
+
+### User Experience Improvements
+- Real-time product search with suggestions
+- Batch loading for better performance
+- Improved error messages and validation
+- Better visual feedback for all actions
+
 ## 🧠 Future Enhancements
 
 - ⏳ Deploy to public testnets (Sepolia, Polygon Mumbai)
 - ⏳ Add product images and metadata
 - ⏳ Implement QR code scanning for product verification
 - ⏳ Add analytics and reporting dashboard
-- ⏳ Implement batch operations
-- ⏳ Add product categories and filtering
-- ⏳ Enhanced search and filtering capabilities
-
----
-
-## 📄 License
-
-ISC
+- ⏳ Product categories and advanced filtering
+- ⏳ Pagination for large product lists
+- ⏳ Export/import product templates
 
 ---
 
@@ -430,15 +528,3 @@ ISC
 CSE 540 – Project 1: Blockchain-Based Supply Chain Provenance System
 
 Built using Hardhat 2, Solidity, TypeScript, React, and Ethereum
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-## 📞 Support
-
-For issues and questions, please open an issue on [GitHub](https://github.com/mikemagi07/supplychain-dapp/issues).
