@@ -8,7 +8,10 @@
     "test": "hardhat test",
     "clean": "hardhat clean",
     "node": "hardhat node",
-    "deploy": "hardhat run scripts/deploy.js"
+    "deploy:localhost": "npm run compile && hardhat run scripts/deploy.js --network localhost",
+    "start": "node scripts/start-dev.js",
+    "start:frontend": "cd frontend && npm start",
+    "dev": "npm run start"
   },
   "repository": {
     "type": "git",
@@ -34,6 +37,7 @@
     "@nomicfoundation/hardhat-toolbox": "^2.0.2",
     "@types/node": "^22.19.0",
     "chai": "^4.5.0",
+    "concurrently": "^8.2.2",
     "dotenv": "^17.2.3",
     "ethers": "^5.8.0",
     "hardhat": "^2.22.10",
